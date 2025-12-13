@@ -21,7 +21,16 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v6
 
-      - name: Validate Addon Structure
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies
+        run: |
+          pip install pyyaml jsonschema
+
+      - name: Validate Repository Structure
         run: |
           if [ ! -f "repository.json" ]; then
             echo "❌ repository.json not found"
@@ -31,7 +40,118 @@ jobs:
             echo "❌ fanexid directory not found"
             exit 1
           fi
-          echo "✅ Addon structure valid"
+          echo "✅ Repository structure valid"
+
+      - name: Validate YAML Files
+        run: |
+          python << 'EOF'
+          import yaml
+          import sys
+          from pathlib import Path
+
+          errors = []
+
+          # Validate repository.json (actually JSON, but check structure)
+          try:
+              import json
+              with open('repository.json') as f:
+                  repo_data = json.load(f)
+              if 'name' not in repo_data or 'url' not in repo_data:
+                  errors.append("repository.json missing required fields")
+              print("✅ repository.json is valid")
+          except Exception as e:
+              errors.append(f"repository.json: {e}")
+
+          # Validate addon config.yaml
+          config_path = Path('fanexid/config.yaml')
+          if config_path.exists():
+              try:
+                  with open(config_path) as f:
+                      config = yaml.safe_load(f)
+                  required_fields = ['name', 'version', 'slug', 'description']
+                  for field in required_fields:
+                      if field not in config:
+                          errors.append(f"config.yaml missing required field: {field}")
+                  print("✅ fanexid/config.yaml is valid")
+              except Exception as e:
+                  errors.append(f"config.yaml: {e}")
+          else:
+              errors.append("fanexid/config.yaml not found")
+
+          # Validate build.yaml
+          build_path = Path('fanexid/build.yaml')
+          if build_path.exists():
+              try:
+                  with open(build_path) as f:
+                      build = yaml.safe_load(f)
+                  if 'build_from' not in build:
+                      errors.append("build.yaml missing 'build_from'")
+                  print("✅ fanexid/build.yaml is valid")
+              except Exception as e:
+                  errors.append(f"build.yaml: {e}")
+          else:
+              errors.append("fanexid/build.yaml not found")
+
+          if errors:
+              print("\n❌ Validation errors:")
+              for e in errors:
+                  print(f"  - {e}")
+              sys.exit(1)
+          else:
+              print("\n✅ All YAML files are valid")
+          EOF
+
+      - name: Validate Dockerfile
+        run: |
+          if [ ! -f "fanexid/Dockerfile" ]; then
+            echo "❌ fanexid/Dockerfile not found"
+            exit 1
+          fi
+          # Basic syntax check
+          if ! grep -q "FROM" fanexid/Dockerfile; then
+            echo "❌ Dockerfile missing FROM statement"
+            exit 1
+          fi
+          echo "✅ Dockerfile structure valid"
+
+      - name: Check Required Files
+        run: |
+          required_files=(
+            "fanexid/config.yaml"
+            "fanexid/build.yaml"
+            "fanexid/Dockerfile"
+            "fanexid/run.sh"
+          )
+          missing=0
+          for file in "${required_files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "❌ Required file missing: $file"
+              missing=1
+            else
+              echo "✅ Found: $file"
+            fi
+          done
+          if [ $missing -eq 1 ]; then
+            exit 1
+          fi
+
+      - name: Validate README
+        continue-on-error: true
+        run: |
+          if [ ! -f "README.md" ]; then
+            echo "⚠️  README.md not found"
+          else
+            echo "✅ README.md found"
+          fi
+
+      - name: Check Documentation
+        continue-on-error: true
+        run: |
+          if [ -f "fanexid/DOCS.md" ]; then
+            echo "✅ Documentation found"
+          else
+            echo "⚠️  fanexid/DOCS.md not found (optional)"
+          fi
 
       - name: Feedback Comment
         if: always()
@@ -44,14 +164,14 @@ jobs:
                  issue_number: context.issue.number,
                  owner: context.repo.owner,
                  repo: context.repo.repo,
-                 body: "❌ **PR Validation Failed**\n\nPlease check the validation errors above."
+                 body: "❌ **PR Validation Failed**\n\nPlease check the validation errors above.\n- Repository structure\n- YAML file validation\n- Dockerfile validation\n- Required files"
                });
             } else if (outcome === 'success') {
                github.rest.issues.createComment({
                  issue_number: context.issue.number,
                  owner: context.repo.owner,
                  repo: context.repo.repo,
-                 body: "✅ **PR Validation Passed**\n\nAll checks passed successfully!"
+                 body: "✅ **PR Validation Passed**\n\nAll Home Assistant add-on checks passed successfully!"
                });
             }
 
@@ -71,4 +191,3 @@ jobs:
               repo: context.repo.repo,
               body: `🎉 **Thank you @${author}!**\n\nYour contribution to the **faneX-ID Home Assistant Addon** repository is valuable! 🚀`
             });
-

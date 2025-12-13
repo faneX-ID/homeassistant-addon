@@ -18,7 +18,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Validate Addon Structure
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies
+        run: |
+          pip install pyyaml jsonschema
+
+      - name: Validate Repository Structure
         run: |
           if [ ! -f "repository.json" ]; then
             echo "❌ repository.json not found"
@@ -28,7 +37,88 @@ jobs:
             echo "❌ fanexid directory not found"
             exit 1
           fi
-          echo "✅ Addon structure valid"
+          echo "✅ Repository structure valid"
+
+      - name: Validate YAML Files
+        run: |
+          python << 'EOF'
+          import yaml
+          import json
+          import sys
+          from pathlib import Path
+
+          errors = []
+
+          # Validate repository.json
+          try:
+              with open('repository.json') as f:
+                  repo_data = json.load(f)
+              required = ['name', 'url']
+              for field in required:
+                  if field not in repo_data:
+                      errors.append(f"repository.json missing: {field}")
+              print("✅ repository.json valid")
+          except Exception as e:
+              errors.append(f"repository.json: {e}")
+
+          # Validate addon config.yaml
+          config_path = Path('fanexid/config.yaml')
+          if config_path.exists():
+              try:
+                  with open(config_path) as f:
+                      config = yaml.safe_load(f)
+                  required = ['name', 'version', 'slug', 'description']
+                  for field in required:
+                      if field not in config:
+                          errors.append(f"config.yaml missing: {field}")
+                  print("✅ config.yaml valid")
+              except Exception as e:
+                  errors.append(f"config.yaml: {e}")
+          else:
+              errors.append("config.yaml not found")
+
+          # Validate build.yaml
+          build_path = Path('fanexid/build.yaml')
+          if build_path.exists():
+              try:
+                  with open(build_path) as f:
+                      build = yaml.safe_load(f)
+                  if 'build_from' not in build:
+                      errors.append("build.yaml missing build_from")
+                  print("✅ build.yaml valid")
+              except Exception as e:
+                  errors.append(f"build.yaml: {e}")
+          else:
+              errors.append("build.yaml not found")
+
+          if errors:
+              print("\n❌ Validation errors:")
+              for e in errors:
+                  print(f"  - {e}")
+              sys.exit(1)
+          EOF
+
+      - name: Validate Dockerfile
+        run: |
+          if [ ! -f "fanexid/Dockerfile" ]; then
+            echo "❌ Dockerfile not found"
+            exit 1
+          fi
+          if ! grep -q "FROM" fanexid/Dockerfile; then
+            echo "❌ Dockerfile invalid"
+            exit 1
+          fi
+          echo "✅ Dockerfile valid"
+
+      - name: Check Required Files
+        run: |
+          for file in fanexid/config.yaml fanexid/build.yaml fanexid/Dockerfile fanexid/run.sh; do
+            if [ ! -f "$file" ]; then
+              echo "❌ Missing: $file"
+              exit 1
+            fi
+          done
+          echo "✅ All required files present"
 
   feedback:
     needs: [validate]
@@ -55,4 +145,3 @@ jobs:
                 body: "❌ **PR Validation Failed**\n\nPlease check the logs and fix the issues."
               });
             }
-
