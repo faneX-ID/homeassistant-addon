@@ -174,8 +174,7 @@ download_file() {
     fi
 
     # 2. If failed, check if we have a token and try with it
-    local exit_code=$?
-    bashio::log.info "Public access failed (HTTP Code/Error: $exit_code). Checking for token..."
+    bashio::log.info "Public access failed. Checking for token..."
 
     if [ -n "$token" ]; then
         local auth_header=$(get_auth_header "$token")
@@ -222,16 +221,13 @@ if [ ! -f "/app/backend/main.py" ] || [ ! -f "/app/frontend/index.html" ]; then
         # We need to fetch the tag name. Logic similar to download: try public, then private.
         LATEST_RELEASE_TAG=""
 
-        # Try public API
-        LATEST_RELEASE_JSON=$(curl -s -f https://api.github.com/repos/fanex-id/core/releases/latest)
-
-        if [ $? -eq 0 ]; then
+        # Use if/else structure to prevent script exit on curl error (due to set -e)
+        if LATEST_RELEASE_JSON=$(curl -s -f https://api.github.com/repos/fanex-id/core/releases/latest); then
              LATEST_RELEASE_TAG=$(echo "$LATEST_RELEASE_JSON" | grep '"tag_name":' | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
         elif [ -n "$GITHUB_TOKEN" ]; then
              bashio::log.info "Public release check failed. Trying with token..."
              AUTH_HEADER=$(get_auth_header "$GITHUB_TOKEN")
-             LATEST_RELEASE_JSON=$(curl -s -f -H "$AUTH_HEADER" https://api.github.com/repos/fanex-id/core/releases/latest)
-             if [ $? -eq 0 ]; then
+             if LATEST_RELEASE_JSON=$(curl -s -f -H "$AUTH_HEADER" https://api.github.com/repos/fanex-id/core/releases/latest); then
                  LATEST_RELEASE_TAG=$(echo "$LATEST_RELEASE_JSON" | grep '"tag_name":' | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
              fi
         fi
@@ -240,7 +236,7 @@ if [ ! -f "/app/backend/main.py" ] || [ ! -f "/app/frontend/index.html" ]; then
             DOWNLOAD_VERSION="$LATEST_RELEASE_TAG"
             bashio::log.info "Latest release identified: $DOWNLOAD_VERSION"
         else
-            bashio::log.warning "Could not identify latest release. Defaulting to 'main' branch."
+            bashio::log.warning "Could not identify latest release (or access denied). Defaulting to 'main' branch."
             DOWNLOAD_VERSION="main"
         fi
     fi
