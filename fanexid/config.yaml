@@ -1,0 +1,65 @@
+---
+name: faneX-ID
+version: "0.1.0"
+slug: fanexid
+description: All-in-one Identity Management System with Social Features
+url: https://github.com/fanex-id/core
+arch:
+  - aarch64
+  - amd64
+  - armv7
+startup: application
+boot: auto
+init: false
+ingress: true
+ingress_port: 8000
+ingress_stream: true
+panel_icon: mdi:account-multiple
+ports:
+  8000/tcp: 8000
+ports_description:
+  8000/tcp: Web Interface (HTTP)
+map:
+  - type: share
+    read_only: false
+options:
+  version: "latest"
+  github_token: ""
+  developer_mode: false
+  reset_database: false
+  log_level: info
+  database:
+    type: sqlite
+  secret_key: ""
+  project_name: "faneX-ID"
+  debug: false
+  demo_mode: false
+  entra:
+    enabled: false
+    client_id: ""
+    tenant_id: ""
+    client_secret: ""
+    redirect_uri: ""
+schema:
+  version: str
+  github_token: password?
+  developer_mode: bool
+  reset_database: bool
+  log_level: list(trace|debug|info|warning|error|fatal)?
+  database:
+    type: list(sqlite|postgresql)
+    postgresql_host: str?
+    postgresql_port: port?
+    postgresql_user: str?
+    postgresql_password: password?
+    postgresql_database: str?
+  secret_key: password?
+  project_name: str?
+  debug: bool?
+  demo_mode: bool?
+  entra:
+    enabled: bool
+    client_id: str?
+    tenant_id: str?
+    client_secret: password?
+    redirect_uri: str?

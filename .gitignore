@@ -1,0 +1,26 @@
+# Home Assistant
+.HA_VERSION
+
+# Development
+.vscode/
+.idea/
+*.log
+*.swp
+*~
+
+# Build artifacts
+*.tar.gz
+*.zip
+build/
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+secrets.yaml
+.env
+
+# Data
+data/

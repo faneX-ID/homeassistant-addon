@@ -1,0 +1,72 @@
+{
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "extends": [
+        "config:recommended"
+    ],
+    "rebaseWhen": "behind-base-branch",
+    "dependencyDashboard": true,
+    "labels": [
+        "dependencies",
+        "no-stale"
+    ],
+    "commitMessagePrefix": "⬆️",
+    "customManagers": [
+        {
+            "customType": "regex",
+            "fileMatch": [
+                "^fanexid/Dockerfile$",
+                "^fanexid/build\\.yaml$"
+            ],
+            "matchStrings": [
+                "ARG BUILD_FROM=(?<depName>.*?):(?<currentValue>.*?)\\s+",
+                "(aarch64|amd64|armhf|armv7|i386):\\s[\"']?(?<depName>.*?):(?<currentValue>.*?)[\"']?\\s"
+            ],
+            "datasourceTemplate": "docker"
+        },
+        {
+            "customType": "regex",
+            "fileMatch": [
+                "^fanexid/Dockerfile$",
+                "^fanexid/build\\.yaml$"
+            ],
+            "matchStrings": [
+                "ARG FANEXID_VERSION=[\"']?(?<currentValue>.+?)[\"']?\\s+"
+            ],
+            "datasourceTemplate": "github-releases",
+            "depNameTemplate": "fanex-id/core",
+            "extractVersionTemplate": "^v(?<version>.*)$"
+        }
+    ],
+    "packageRules": [
+        {
+            "matchManagers": [
+                "github-actions"
+            ],
+            "automerge": true,
+            "ignoreTests": true
+        },
+        {
+            "groupName": "Add-on base image",
+            "matchDatasources": [
+                "docker"
+            ],
+            "matchPackageNames": [
+                "ghcr.io/hassio-addons/base"
+            ],
+            "automerge": true,
+            "ignoreTests": true
+        },
+        {
+            "groupName": "faneX-ID Core",
+            "matchDatasources": [
+                "github-releases"
+            ],
+            "matchPackageNames": [
+                "fanex-id/core"
+            ],
+            "automerge": false,
+            "includeAlphaVersions": true,
+            "includeUnstableVersions": true
+        }
+    ]
+}

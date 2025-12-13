@@ -1,0 +1,110 @@
+---
+configuration:
+  version:
+    name: Version
+    description: >-
+      Version von faneX-ID, die installiert werden soll. Verwenden Sie 'latest'
+      für die neueste Version oder geben Sie einen Tag wie 'v1.0.0' an.
+      Bei Verwendung von Renovate wird dies automatisch auf neue Versionen
+      (einschließlich Pre-Releases) aktualisiert.
+
+  github_token:
+    name: GitHub Token
+    description: >-
+      Optional: Personal Access Token (Classic oder Fine-grained) für den Zugriff
+      auf private Repositories. Lassen Sie dieses Feld leer, wenn das Repository
+      öffentlich ist. Wird nur benötigt, wenn der öffentliche Download fehlschlägt.
+
+  developer_mode:
+    name: Entwicklermodus
+    description: >-
+      Wenn aktiviert, lädt das Addon bei jedem Neustart den neuesten Code
+      vom main-Branch herunter und verwendet diesen. Dies ist nur für
+      Entwicklungs- und Testzwecke gedacht. WARNUNG: Dies kann instabile
+      Funktionen enthalten!
+
+  reset_database:
+    name: Datenbank zurücksetzen
+    description: >-
+      ⚠️ WARNUNG: Dies löscht ALLE DATEN einschließlich Benutzer, Profile,
+      Matches und Chat-Verlauf! Die Datenbank wird beim nächsten Neustart
+      vollständig zurückgesetzt. Diese Aktion kann nicht rückgängig gemacht
+      werden. Aktivieren Sie dies nur, wenn Sie absolut sicher sind, dass
+      Sie von vorne beginnen möchten. Nach dem Neustart wird diese Option
+      automatisch wieder deaktiviert.
+
+  log_level:
+    name: Log-Level
+    description: Steuert die Ausführlichkeit der Log-Ausgabe.
+
+  database:
+    name: Datenbank-Konfiguration
+    description: Konfigurieren Sie das Datenbank-Backend für faneX-ID.
+
+  database.type:
+    name: Datenbank-Typ
+    description: Wählen Sie zwischen SQLite (einfach, eingebettet) oder PostgreSQL (erweitert, extern).
+
+  database.postgresql_host:
+    name: PostgreSQL-Host
+    description: Hostname oder IP-Adresse des PostgreSQL-Servers.
+
+  database.postgresql_port:
+    name: PostgreSQL-Port
+    description: Portnummer des PostgreSQL-Servers (Standard 5432).
+
+  database.postgresql_user:
+    name: PostgreSQL-Benutzer
+    description: Benutzername für die PostgreSQL-Authentifizierung.
+
+  database.postgresql_password:
+    name: PostgreSQL-Passwort
+    description: Passwort für die PostgreSQL-Authentifizierung.
+
+  database.postgresql_database:
+    name: PostgreSQL-Datenbank
+    description: Name der zu verwendenden PostgreSQL-Datenbank.
+
+  secret_key:
+    name: Geheimer Schlüssel
+    description: >-
+      Geheimer Schlüssel für Verschlüsselung und Sitzungsverwaltung.
+      Leer lassen, um beim ersten Start automatisch einen sicheren
+      Schlüssel zu generieren (empfohlen).
+
+  project_name:
+    name: Projektname
+    description: Anzeigename für die Anwendung.
+
+  debug:
+    name: Debug-Modus
+    description: Debug-Modus für detaillierte Fehlermeldungen aktivieren (nicht für Produktion empfohlen).
+
+  demo_mode:
+    name: Demo-Modus
+    description: Demo-Modus mit Beispieldaten und eingeschränkter Funktionalität aktivieren.
+
+  entra:
+    name: Microsoft Entra ID (SSO)
+    description: Single Sign-On mit Microsoft Entra ID (ehemals Azure AD) konfigurieren.
+
+  entra.enabled:
+    name: Entra ID SSO aktivieren
+    description: Authentifizierung über Microsoft Entra ID aktivieren.
+
+  entra.client_id:
+    name: Client-ID
+    description: Anwendungs-ID (Client-ID) aus der Azure-App-Registrierung.
+
+  entra.tenant_id:
+    name: Mandanten-ID
+    description: Verzeichnis-ID (Mandanten-ID) aus der Azure-App-Registrierung.
+
+  entra.client_secret:
+    name: Client-Secret
+    description: Client-Secret aus der Azure-App-Registrierung.
+
+  entra.redirect_uri:
+    name: Umleitungs-URI
+    description: >-
+      OAuth-Umleitungs-URI. Leer lassen, um automatisch die Ingress-URL zu verwenden.
