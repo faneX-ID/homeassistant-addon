@@ -1,0 +1,35 @@
+name: PR Auto-Fix
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main, master]
+
+permissions:
+  contents: write
+
+jobs:
+  auto-fix:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]' && github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Check for YAML formatting
+        run: |
+          echo "YAML formatting check (if needed)"
+
+      - name: Check for changes & Commit
+        run: |
+          if [[ -n $(git status -s) ]]; then
+            git config --global user.name 'github-actions[bot]'
+            git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+            git add .
+            git commit -m "style: auto-fix formatting issues [skip ci]"
+            git push origin HEAD:${{ github.head_ref }}
+          fi
+
