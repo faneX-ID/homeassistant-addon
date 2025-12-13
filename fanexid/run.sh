@@ -221,22 +221,39 @@ if [ ! -f "/app/backend/main.py" ] || [ ! -f "/app/frontend/index.html" ]; then
         # We need to fetch the tag name. Logic similar to download: try public, then private.
         LATEST_RELEASE_TAG=""
 
-        # Use if/else structure to prevent script exit on curl error (due to set -e)
-        if LATEST_RELEASE_JSON=$(curl -s -f https://api.github.com/repos/fanex-id/core/releases/latest); then
-             LATEST_RELEASE_TAG=$(echo "$LATEST_RELEASE_JSON" | grep '"tag_name":' | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
-        elif [ -n "$GITHUB_TOKEN" ]; then
-             bashio::log.info "Public release check failed. Trying with token..."
-             AUTH_HEADER=$(get_auth_header "$GITHUB_TOKEN")
-             if LATEST_RELEASE_JSON=$(curl -s -f -H "$AUTH_HEADER" https://api.github.com/repos/fanex-id/core/releases/latest); then
-                 LATEST_RELEASE_TAG=$(echo "$LATEST_RELEASE_JSON" | grep '"tag_name":' | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
+        # Use temp file to avoid subshell exit code issues with set -e
+        # 1. Try Public API
+        bashio::log.info "1. Trying public GitHub API..."
+        if curl -s -f -o /tmp/latest_release.json https://api.github.com/repos/fanex-id/core/releases/latest; then
+             # Extract tag
+             bashio::log.info "✅ Public API request successful."
+             LATEST_RELEASE_TAG=$(grep '"tag_name":' /tmp/latest_release.json | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
+        else
+             # 2. Try with Token if available
+             bashio::log.info "⚠️ Public API request failed (likely 404/403 or private repo)."
+             if [ -n "$GITHUB_TOKEN" ]; then
+                 bashio::log.info "2. Retrying with provided GitHub Token..."
+                 AUTH_HEADER=$(get_auth_header "$GITHUB_TOKEN")
+                 if curl -s -f -H "$AUTH_HEADER" -o /tmp/latest_release.json https://api.github.com/repos/fanex-id/core/releases/latest; then
+                     bashio::log.info "✅ Authenticated API request successful."
+                     LATEST_RELEASE_TAG=$(grep '"tag_name":' /tmp/latest_release.json | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
+                 else
+                     bashio::log.warning "❌ Authenticated API request also failed. Please check your token."
+                 fi
+             else
+                 bashio::log.info "No GitHub Token configured to retry with."
              fi
         fi
 
+        # Cleanup temp file
+        rm -f /tmp/latest_release.json
+
         if [ -n "$LATEST_RELEASE_TAG" ]; then
             DOWNLOAD_VERSION="$LATEST_RELEASE_TAG"
-            bashio::log.info "Latest release identified: $DOWNLOAD_VERSION"
+            bashio::log.info "👉 Latest release identified: $DOWNLOAD_VERSION"
         else
-            bashio::log.warning "Could not identify latest release (or access denied). Defaulting to 'main' branch."
+            bashio::log.warning "⚠️ Could not identify latest release (or access denied)."
+            bashio::log.warning "👉 Defaulting to 'main' branch as fallback."
             DOWNLOAD_VERSION="main"
         fi
     fi
@@ -248,10 +265,12 @@ if [ ! -f "/app/backend/main.py" ] || [ ! -f "/app/frontend/index.html" ]; then
         DOWNLOAD_URL="https://api.github.com/repos/fanex-id/core/tarball/$DOWNLOAD_VERSION"
     fi
 
+    bashio::log.info "Downloading version: $DOWNLOAD_VERSION"
+
     # Download
     cd /tmp || exit 1
     if download_file "$DOWNLOAD_URL" "fanexid.tar.gz" "$GITHUB_TOKEN"; then
-        bashio::log.info "Extracting..."
+        bashio::log.info "Extracting archive..."
         rm -rf /tmp/fanexid-src
         mkdir -p /tmp/fanexid-src
         tar -xzf fanexid.tar.gz -C /tmp/fanexid-src --strip-components=1
@@ -262,7 +281,7 @@ if [ ! -f "/app/backend/main.py" ] || [ ! -f "/app/frontend/index.html" ]; then
             cp -r /tmp/fanexid-src/backend/* /app/backend/
 
             if [ -f "/app/backend/requirements.txt" ]; then
-                bashio::log.info "Installing Python dependencies..."
+                bashio::log.info "Installing Python dependencies from requirements.txt..."
                 pip3 install --no-cache-dir -r /app/backend/requirements.txt || \
                     bashio::log.warning "Some Python dependencies failed to install"
             fi
