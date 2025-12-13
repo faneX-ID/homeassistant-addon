@@ -76,7 +76,7 @@ RUN \
             rm -rf /tmp/build && \
             echo "✅ Build complete. Image is self-contained."; \
         else \
-            echo "⚠️ Download failed (likely Private Repo or Invalid Version)."; \
+            echo "⚠️ Download failed (likely Private Repository or Invalid Version)."; \
             echo "Skipping build stage. 'run.sh' will handle download with Token."; \
             # Ensure directories are clean/empty so run.sh detects missing code \
             rm -rf /app/backend/* /app/frontend/*; \
