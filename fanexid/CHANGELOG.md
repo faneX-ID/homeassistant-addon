@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+
+- Add Cloudflare Cache support option (default: off)
+- Cloudflare Always Online Cache can now be enabled via configuration
+
 ## 0.1.0
 
 - Update nodejs version

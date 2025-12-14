@@ -84,6 +84,13 @@ configuration:
     name: Demo-Modus
     description: Demo-Modus mit Beispieldaten und eingeschränkter Funktionalität aktivieren.
 
+  cloudflare_cache:
+    name: Cloudflare Cache
+    description: >-
+      Aktiviert Cloudflare Always Online Cache Support. Wenn aktiviert, kann
+      Cloudflare gecachte Inhalte servieren, auch wenn der Origin-Server offline ist.
+      Standard: Aus
+
   entra:
     name: Microsoft Entra ID (SSO)
     description: Single Sign-On mit Microsoft Entra ID (ehemals Azure AD) konfigurieren.

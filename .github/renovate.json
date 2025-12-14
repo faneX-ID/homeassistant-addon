@@ -30,11 +30,12 @@
                 "^fanexid/build\\.yaml$"
             ],
             "matchStrings": [
-                "ARG FANEXID_VERSION=[\"']?(?<currentValue>.+?)[\"']?\\s+"
+                "ARG FANEXID_VERSION=[\"']?(?<currentValue>.+?)[\"']?\\s+",
+                "FANEXID_VERSION:\\s+[\"']?(?<currentValue>.+?)[\"']?\\s"
             ],
             "datasourceTemplate": "github-releases",
             "depNameTemplate": "fanex-id/core",
-            "extractVersionTemplate": "^v(?<version>.*)$"
+            "extractVersionTemplate": "^v?(?<version>.*)$"
         }
     ],
     "packageRules": [
@@ -66,7 +67,9 @@
             ],
             "automerge": false,
             "includeAlphaVersions": true,
-            "includeUnstableVersions": true
+            "includeBetaVersions": true,
+            "includeUnstableVersions": true,
+            "versioning": "loose"
         }
     ]
 }

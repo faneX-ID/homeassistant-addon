@@ -80,6 +80,13 @@ configuration:
     name: Demo Mode
     description: Enable demo mode with sample data and restricted functionality.
 
+  cloudflare_cache:
+    name: Cloudflare Cache
+    description: >-
+      Enables Cloudflare Always Online Cache support. When enabled, Cloudflare
+      can serve cached content even when the origin server is offline.
+      Default: Off
+
   entra:
     name: Microsoft Entra ID (SSO)
     description: Configure Single Sign-On with Microsoft Entra ID (formerly Azure AD).

@@ -155,6 +155,15 @@ else
     bashio::log.info "Using default Release Type: $RELEASE_TYPE"
 fi
 
+# Cloudflare Cache Configuration
+if bashio::config.true 'cloudflare_cache'; then
+    export VITE_ENABLE_CLOUDFLARE_CACHE="true"
+    bashio::log.info "Cloudflare Cache: ENABLED"
+else
+    export VITE_ENABLE_CLOUDFLARE_CACHE="false"
+    bashio::log.info "Cloudflare Cache: DISABLED"
+fi
+
 # Version Information
 export BACKEND_VERSION="${BUILD_VERSION:-dev}"
 
@@ -350,7 +359,77 @@ if [ ! -f "/app/backend/main.py" ] || [ ! -f "/app/frontend/index.html" ]; then
         bashio::log.info "==================================================="
     else
         bashio::log.error "Download failed! Please check your network or token settings."
-        exit 1
+        # If a specific version was requested and failed, try falling back to main branch
+        if [ "$VERSION" != "latest" ] && [ "$VERSION" != "main" ]; then
+            bashio::log.warning "⚠️ Requested version '$VERSION' not available."
+            bashio::log.warning "👉 Falling back to 'main' branch..."
+            DOWNLOAD_URL="https://api.github.com/repos/${GITHUB_REPO_CONFIG}/tarball/main"
+            if download_file "$DOWNLOAD_URL" "fanexid.tar.gz" "$GITHUB_TOKEN"; then
+                bashio::log.info "✅ Fallback to main branch successful."
+                # Continue with extraction and build (same as above)
+                bashio::log.info "Extracting archive..."
+                rm -rf /tmp/fanexid-src
+                mkdir -p /tmp/fanexid-src
+                tar -xzf fanexid.tar.gz -C /tmp/fanexid-src --strip-components=1
+
+                # Install Backend
+                bashio::log.info "Installing Backend..."
+                if [ -d "/tmp/fanexid-src/backend" ]; then
+                    cp -r /tmp/fanexid-src/backend/* /app/backend/
+
+                    if [ -f "/app/backend/requirements.txt" ]; then
+                        bashio::log.info "Installing Python dependencies from requirements.txt..."
+                        pip3 install --no-cache-dir -r /app/backend/requirements.txt || \
+                            bashio::log.warning "Some Python dependencies failed to install"
+                    fi
+                else
+                    bashio::log.error "Backend directory not found in repository!"
+                    exit 1
+                fi
+
+                # Build Frontend
+                bashio::log.info "Building Frontend (this may take several minutes)..."
+                if [ -d "/tmp/fanexid-src/frontend" ]; then
+                    cd /tmp/fanexid-src/frontend || exit 1
+
+                    bashio::log.info "Running 'npm install'..."
+                    if npm install; then
+                        bashio::log.info "Running 'npm run build'..."
+                        if npm run build; then
+                            bashio::log.info "Frontend build successful. Installing..."
+                            if [ -d "dist" ]; then
+                                cp -r dist/* /app/frontend/
+                            else
+                                bashio::log.error "'dist' directory not found after build!"
+                                exit 1
+                            fi
+                        else
+                            bashio::log.error "Frontend build failed!"
+                            exit 1
+                        fi
+                    else
+                        bashio::log.error "npm install failed!"
+                        exit 1
+                    fi
+                else
+                    bashio::log.error "Frontend directory not found in repository!"
+                    exit 1
+                fi
+
+                # Cleanup
+                cd / || exit 1
+                rm -rf /tmp/fanexid.tar.gz /tmp/fanexid-src
+
+                bashio::log.info "==================================================="
+                bashio::log.info "   ✅ CODE DOWNLOAD COMPLETE (MAIN BRANCH)"
+                bashio::log.info "==================================================="
+            else
+                bashio::log.error "❌ Fallback to main branch also failed!"
+                exit 1
+            fi
+        else
+            exit 1
+        fi
     fi
 fi
 
