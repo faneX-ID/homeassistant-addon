@@ -77,3 +77,4 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Add-on:** ${{ steps.version.outputs.slug }}" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+
