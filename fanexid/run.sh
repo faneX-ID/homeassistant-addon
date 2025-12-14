@@ -137,9 +137,26 @@ if bashio::config.true 'entra.enabled'; then
     bashio::log.info "Entra ID SSO: ENABLED"
 fi
 
+# GitHub Repo Configuration
+if bashio::config.has_value 'github_repo' && [ -n "$(bashio::config 'github_repo')" ]; then
+    export GITHUB_REPO=$(bashio::config 'github_repo')
+    bashio::log.info "GitHub Repo set to: $GITHUB_REPO"
+else
+    export GITHUB_REPO="faneX-ID/core"
+    bashio::log.info "Using default GitHub Repo: $GITHUB_REPO"
+fi
+
+# Release Type Configuration
+if bashio::config.has_value 'release_type' && [ -n "$(bashio::config 'release_type')" ]; then
+    export RELEASE_TYPE=$(bashio::config 'release_type')
+    bashio::log.info "Release Type set to: $RELEASE_TYPE"
+else
+    export RELEASE_TYPE="beta"
+    bashio::log.info "Using default Release Type: $RELEASE_TYPE"
+fi
+
 # Version Information
 export BACKEND_VERSION="${BUILD_VERSION:-dev}"
-export RELEASE_TYPE="addon"
 
 # --- HELPER FUNCTIONS FOR DOWNLOAD ---
 
@@ -215,8 +232,13 @@ if [ ! -f "/app/backend/main.py" ] || [ ! -f "/app/frontend/index.html" ]; then
     # Determine version to download
     DOWNLOAD_VERSION="$VERSION"
 
+    # Get GitHub Repo from config or use default
+    GITHUB_REPO_CONFIG="${GITHUB_REPO:-faneX-ID/core}"
+    REPO_OWNER=$(echo "$GITHUB_REPO_CONFIG" | cut -d'/' -f1)
+    REPO_NAME=$(echo "$GITHUB_REPO_CONFIG" | cut -d'/' -f2)
+
     if [ "$DOWNLOAD_VERSION" == "latest" ]; then
-        bashio::log.info "Fetching latest release information..."
+        bashio::log.info "Fetching latest release information for $GITHUB_REPO_CONFIG..."
 
         # We need to fetch the tag name. Logic similar to download: try public, then private.
         LATEST_RELEASE_TAG=""
@@ -224,7 +246,7 @@ if [ ! -f "/app/backend/main.py" ] || [ ! -f "/app/frontend/index.html" ]; then
         # Use temp file to avoid subshell exit code issues with set -e
         # 1. Try Public API
         bashio::log.info "1. Trying public GitHub API..."
-        if curl -s -f -o /tmp/latest_release.json https://api.github.com/repos/fanex-id/core/releases/latest; then
+        if curl -s -f -o /tmp/latest_release.json "https://api.github.com/repos/${GITHUB_REPO_CONFIG}/releases/latest"; then
              # Extract tag
              bashio::log.info "✅ Public API request successful."
              LATEST_RELEASE_TAG=$(grep '"tag_name":' /tmp/latest_release.json | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
@@ -234,7 +256,7 @@ if [ ! -f "/app/backend/main.py" ] || [ ! -f "/app/frontend/index.html" ]; then
              if [ -n "$GITHUB_TOKEN" ]; then
                  bashio::log.info "2. Retrying with provided GitHub Token..."
                  AUTH_HEADER=$(get_auth_header "$GITHUB_TOKEN")
-                 if curl -s -f -H "$AUTH_HEADER" -o /tmp/latest_release.json https://api.github.com/repos/fanex-id/core/releases/latest; then
+                 if curl -s -f -H "$AUTH_HEADER" -o /tmp/latest_release.json "https://api.github.com/repos/${GITHUB_REPO_CONFIG}/releases/latest"; then
                      bashio::log.info "✅ Authenticated API request successful."
                      LATEST_RELEASE_TAG=$(grep '"tag_name":' /tmp/latest_release.json | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
                  else
@@ -260,9 +282,9 @@ if [ ! -f "/app/backend/main.py" ] || [ ! -f "/app/frontend/index.html" ]; then
 
     # Prepare Download URL
     if [ "$DOWNLOAD_VERSION" == "main" ]; then
-        DOWNLOAD_URL="https://api.github.com/repos/fanex-id/core/tarball/main"
+        DOWNLOAD_URL="https://api.github.com/repos/${GITHUB_REPO_CONFIG}/tarball/main"
     else
-        DOWNLOAD_URL="https://api.github.com/repos/fanex-id/core/tarball/$DOWNLOAD_VERSION"
+        DOWNLOAD_URL="https://api.github.com/repos/${GITHUB_REPO_CONFIG}/tarball/$DOWNLOAD_VERSION"
     fi
 
     bashio::log.info "Downloading version: $DOWNLOAD_VERSION"
@@ -348,7 +370,8 @@ if bashio::config.true 'developer_mode'; then
 
     # Download main branch with fallback
     cd /tmp || exit 1
-    DOWNLOAD_URL="https://api.github.com/repos/fanex-id/core/tarball/main"
+    GITHUB_REPO_CONFIG="${GITHUB_REPO:-faneX-ID/core}"
+    DOWNLOAD_URL="https://api.github.com/repos/${GITHUB_REPO_CONFIG}/tarball/main"
 
     if download_file "$DOWNLOAD_URL" "main.tar.gz" "$GITHUB_TOKEN"; then
         bashio::log.info "Extracting..."

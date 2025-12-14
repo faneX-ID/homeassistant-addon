@@ -29,6 +29,11 @@ faneX-ID is a comprehensive identity management platform that combines user mana
 - Supports both **Classic** and **Fine-grained** tokens
 - Leave empty only after first successful download (code is cached)
 
+**github_repo**: GitHub Repository (default: `faneX-ID/core`)
+- Repository to download from (format: `owner/repo`)
+- Useful if you're using a fork or different repository
+- Defaults to `faneX-ID/core` if not specified
+
 #### How to Create a GitHub Token:
 
 GitHub offers two types of Personal Access Tokens. **Fine-grained tokens** are recommended for better security, but **Classic tokens** work equally well.
@@ -139,6 +144,11 @@ When using PostgreSQL, configure these settings:
 - Populates the application with sample data
 - Restricts some functionality
 
+**release_type**: Release type (default: `beta`)
+- Options: `stable`, `beta`, `alpha`, `nightly`
+- Used for version tracking and update notifications
+- Defaults to `beta` if not specified
+
 **secret_key**: Encryption key (optional)
 - Leave empty to auto-generate a secure key
 - Once generated, keep this value consistent
@@ -170,6 +180,7 @@ When enabled, configure:
 ```yaml
 version: "latest"
 github_token: "ghp_your_github_token_here"
+github_repo: "faneX-ID/core"
 developer_mode: false
 log_level: info
 database:
@@ -177,6 +188,7 @@ database:
 project_name: "faneX-ID"
 debug: false
 demo_mode: false
+release_type: "beta"
 entra:
   enabled: false
 ```
@@ -186,6 +198,7 @@ entra:
 ```yaml
 version: "v1.0.0"
 github_token: "ghp_your_github_token_here"
+github_repo: "faneX-ID/core"
 developer_mode: false
 log_level: info
 database:
@@ -197,6 +210,7 @@ database:
   postgresql_database: "fanexid_db"
 project_name: "faneX-ID"
 secret_key: "your_secret_key_here"
+release_type: "stable"
 entra:
   enabled: true
   client_id: "your_client_id"

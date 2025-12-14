@@ -1,6 +1,6 @@
 ---
 name: faneX-ID
-version: "0.1.1"
+version: "0.2.0"
 slug: fanexid
 description: All-in-one Identity Management System with Social Features
 url: https://github.com/fanex-id/core
@@ -25,6 +25,7 @@ map:
 options:
   version: "latest"
   github_token: ""
+  github_repo: "faneX-ID/core"
   developer_mode: false
   reset_database: false
   log_level: info
@@ -34,6 +35,7 @@ options:
   project_name: "faneX-ID"
   debug: false
   demo_mode: false
+  release_type: "beta"
   entra:
     enabled: false
     client_id: ""
@@ -43,6 +45,7 @@ options:
 schema:
   version: str
   github_token: password?
+  github_repo: str?
   developer_mode: bool
   reset_database: bool
   log_level: list(trace|debug|info|warning|error|fatal)?
@@ -57,6 +60,7 @@ schema:
   project_name: str?
   debug: bool?
   demo_mode: bool?
+  release_type: list(stable|beta|alpha|nightly)?
   entra:
     enabled: bool
     client_id: str?
