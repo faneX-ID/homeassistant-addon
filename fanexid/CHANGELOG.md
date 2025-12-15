@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2
+
+- Remove obsolete Entra/SSO configuration options
+- Verify Demo Mode and Debug Mode configuration options
+
 ## 0.2.1
 
 - Add Cloudflare Cache support option (default: off)

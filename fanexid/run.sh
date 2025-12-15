@@ -121,21 +121,7 @@ else
     export DEMO_MODE="false"
 fi
 
-# Entra ID / SSO Configuration
-if bashio::config.true 'entra.enabled'; then
-    bashio::log.info "Configuring Microsoft Entra ID SSO..."
-    export ENTRA_CLIENT_ID=$(bashio::config 'entra.client_id')
-    export ENTRA_TENANT_ID=$(bashio::config 'entra.tenant_id')
-    export ENTRA_CLIENT_SECRET=$(bashio::config 'entra.client_secret')
 
-    if bashio::config.has_value 'entra.redirect_uri' && [ -n "$(bashio::config 'entra.redirect_uri')" ]; then
-        export ENTRA_REDIRECT_URI=$(bashio::config 'entra.redirect_uri')
-    else
-        # Use ingress URL
-        export ENTRA_REDIRECT_URI="http://homeassistant.local:8123/api/hassio_ingress/$(bashio::addon.slug)/api/auth/callback"
-    fi
-    bashio::log.info "Entra ID SSO: ENABLED"
-fi
 
 # GitHub Repo Configuration
 if bashio::config.has_value 'github_repo' && [ -n "$(bashio::config 'github_repo')" ]; then

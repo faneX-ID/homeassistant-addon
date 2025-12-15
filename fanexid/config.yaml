@@ -1,6 +1,6 @@
 ---
 name: faneX-ID
-version: "0.2.1"
+version: "0.2.2"
 slug: fanexid
 description: All-in-one Identity Management System with Social Features
 url: https://github.com/fanex-id/core
@@ -37,12 +37,6 @@ options:
   demo_mode: false
   release_type: "beta"
   cloudflare_cache: false
-  entra:
-    enabled: false
-    client_id: ""
-    tenant_id: ""
-    client_secret: ""
-    redirect_uri: ""
 schema:
   version: str
   github_token: password?
@@ -63,9 +57,3 @@ schema:
   demo_mode: bool?
   release_type: list(stable|beta|alpha|nightly)?
   cloudflare_cache: bool
-  entra:
-    enabled: bool
-    client_id: str?
-    tenant_id: str?
-    client_secret: password?
-    redirect_uri: str?
