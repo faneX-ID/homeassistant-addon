@@ -343,6 +343,8 @@ if [ ! -f "/app/backend/main.py" ] || [ ! -f "/app/frontend/index.html" ]; then
         bashio::log.info "==================================================="
         bashio::log.info "   ✅ CODE DOWNLOAD COMPLETE"
         bashio::log.info "==================================================="
+        # Mark that we just did initial download - skip developer_mode re-download
+        INITIAL_DOWNLOAD_DONE="true"
     else
         bashio::log.error "Download failed! Please check your network or token settings."
         # If a specific version was requested and failed, try falling back to main branch
@@ -409,6 +411,8 @@ if [ ! -f "/app/backend/main.py" ] || [ ! -f "/app/frontend/index.html" ]; then
                 bashio::log.info "==================================================="
                 bashio::log.info "   ✅ CODE DOWNLOAD COMPLETE (MAIN BRANCH)"
                 bashio::log.info "==================================================="
+                # Mark that we just did initial download - skip developer_mode re-download
+                INITIAL_DOWNLOAD_DONE="true"
             else
                 bashio::log.error "❌ Fallback to main branch also failed!"
                 exit 1
@@ -420,7 +424,8 @@ if [ ! -f "/app/backend/main.py" ] || [ ! -f "/app/frontend/index.html" ]; then
 fi
 
 # --- DEV MODE: USE MAIN BRANCH ---
-if bashio::config.true 'developer_mode'; then
+# Skip if we just did initial download (to avoid downloading twice)
+if bashio::config.true 'developer_mode' && [ "${INITIAL_DOWNLOAD_DONE:-false}" != "true" ]; then
     bashio::log.warning "=================================================="
     bashio::log.warning "   ⚠️  DEVELOPER MODE ENABLED  ⚠️"
     bashio::log.warning "=================================================="
@@ -522,6 +527,19 @@ if [ -f "/app/backend/alembic.ini" ]; then
     cd /app/backend || exit 1
     alembic upgrade head || bashio::log.warning "Migration failed or not needed, continuing..."
 fi
+
+# --- CREATE .ENV FILE FOR BACKEND ---
+# Required for beta/stable releases to prevent security error
+bashio::log.info "Creating .env file for backend..."
+cat > /app/backend/.env << EOF
+SECRET_KEY=${SECRET_KEY}
+DATABASE_URL=${DATABASE_URL}
+DEBUG=${DEBUG}
+DEMO_MODE=${DEMO_MODE}
+RELEASE_TYPE=${RELEASE_TYPE}
+GITHUB_TOKEN=${GITHUB_TOKEN:-}
+GITHUB_REPO=${GITHUB_REPO}
+EOF
 
 # --- BACKEND START ---
 bashio::log.info "Starting faneX-ID Backend (Uvicorn)..."
