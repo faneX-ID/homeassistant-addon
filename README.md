@@ -1,4 +1,4 @@
-# faneX-ID Home Assistant Add-on
+# faneX-ID Home Assistant Add-on 🏠
 
 [![GitHub Release][releases-shield]][releases]
 [![License][license-shield]](LICENSE)
@@ -12,17 +12,17 @@ _Identity Management System with Social Features for Home Assistant._
 
 ![faneX-ID Logo](fanexid/logo.png)
 
-## About
+## About 📖
 
-faneX-ID is a comprehensive identity management platform that brings social networking capabilities directly to your Home Assistant instance. This add-on packages the complete faneX-ID application (frontend and backend) into a single, easy-to-install package.
+**faneX-ID** is a comprehensive identity management platform that brings social networking capabilities directly to your Home Assistant instance. This add-on packages the complete faneX-ID application (frontend and backend) into a single, easy-to-install package.
 
-### Features
+## Features ✨
 
-- 🔐 **User Authentication & Management** - Complete user lifecycle management
-- 🔑 **SSO Support**
-- 🔌 **Plugin System** - Extensible architecture for custom functionality
-- 📱 **Mobile-Friendly** - Responsive design for all devices
-- 🌍 **Multi-language**
+- 🔐 **User Authentication**: Complete user lifecycle management.
+- 🔑 **SSO Support**: Single Sign-On capabilities.
+- 🔌 **Plugin System**: Extensible architecture.
+- 📱 **Mobile-Friendly**: Responsive design.
+- 🌍 **Multi-language**: Localization support.
 
 ## Installation
 
