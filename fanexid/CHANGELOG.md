@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3
+
+- Improved Ingress support with relative paths and dynamic port handling
+
+
 ## 0.2.2
 
 - Remove obsolete Entra/SSO configuration options

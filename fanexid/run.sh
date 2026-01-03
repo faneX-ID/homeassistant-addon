@@ -314,6 +314,9 @@ if [ ! -f "/app/backend/main.py" ] || [ ! -f "/app/frontend/index.html" ]; then
 
             bashio::log.info "Running 'npm install'..."
             if npm install; then
+                bashio::log.info "Configuring relative paths for Ingress..."
+                sed -i "s|defineConfig({|defineConfig({ base: './',|g" vite.config.ts
+                sed -i "s|const API_BASE_URL = .*|const API_BASE_URL = './api/v1'|g" src/config.ts
                 bashio::log.info "Running 'npm run build'..."
                 if npm run build; then
                     bashio::log.info "Frontend build successful. Installing..."
@@ -475,6 +478,9 @@ if bashio::config.true 'developer_mode' && [ "${INITIAL_DOWNLOAD_DONE:-false}" !
 
             bashio::log.info "Running 'npm install'..."
             if npm install; then
+                bashio::log.info "Configuring relative paths for Ingress..."
+                sed -i "s|defineConfig({|defineConfig({ base: './',|g" vite.config.ts
+                sed -i "s|const API_BASE_URL = .*|const API_BASE_URL = './api/v1'|g" src/config.ts
                 bashio::log.info "Running 'npm run build'..."
                 if npm run build; then
                     bashio::log.info "Frontend build successful. Updating files..."
