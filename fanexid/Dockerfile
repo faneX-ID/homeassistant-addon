@@ -1,4 +1,4 @@
-ARG BUILD_FROM
+ARG BUILD_FROM=ghcr.io/hassio-addons/base:19.0.0
 # hadolint ignore=DL3006
 FROM ${BUILD_FROM}
 
@@ -33,9 +33,6 @@ RUN \
             ;; \
         aarch64) \
             NODE_URL="https://unofficial-builds.nodejs.org/download/release/${NODE_VERSION}/node-${NODE_VERSION}-linux-arm64-musl.tar.xz" \
-            ;; \
-        armv7l|armv6l) \
-            NODE_URL="https://unofficial-builds.nodejs.org/download/release/${NODE_VERSION}/node-${NODE_VERSION}-linux-armv7l.tar.xz" \
             ;; \
         *) \
             echo "Unsupported architecture: $ARCH" && exit 1 \
@@ -128,11 +125,9 @@ RUN \
 COPY nginx.conf /etc/nginx/http.d/default.conf
 
 # Copy Run Script
-COPY run.sh /run.sh
-RUN chmod a+x /run.sh
+# Copy rootfs
+COPY rootfs /
 
 # Health check
 HEALTHCHECK \
     CMD curl --fail http://127.0.0.1:8000/api/health || exit 1
-
-CMD [ "/run.sh" ]
