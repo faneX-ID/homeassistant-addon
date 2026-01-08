@@ -1,0 +1,14 @@
+#!/usr/bin/with-contenv bashio
+# Set Python path
+export PYTHONPATH=/app/backend
+
+# Get Log Level
+if bashio::config.has_value 'log_level'; then
+    LOG_LEVEL=$(bashio::config 'log_level' | tr '[:lower:]' '[:upper:]')
+else
+    LOG_LEVEL="INFO"
+fi
+
+bashio::log.info "Starting faneX-ID Backend (Uvicorn)..."
+cd /app/backend || exit 1
+exec uvicorn main:app --host 127.0.0.1 --port 8001 --log-level "$(echo $LOG_LEVEL | tr '[:upper:]' '[:lower:]')"

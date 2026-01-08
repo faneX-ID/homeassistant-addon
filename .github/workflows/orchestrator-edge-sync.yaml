@@ -1,0 +1,263 @@
+name: Orchestrator Edge Sync
+
+# This workflow keeps the 'edge' branch in sync with 'master'
+# and prepares it for local development builds (removes image tags)
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - ".unsupported/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+    inputs:
+      force_sync:
+        description: "Force sync edge branch"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  sync-edge:
+    name: 🔄 Sync Edge Branch
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && !contains(join(github.event.commits.*.message, ' '), '[skip-edge]'))
+    steps:
+      - name: ⤵️ Checkout for file check
+        if: github.event_name == 'push'
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          fetch-depth: 0
+
+      - name: 🔍 Check if only workflow files changed
+        id: check_changes
+        if: github.event_name == 'push'
+        run: |
+          # Get changed files in the push
+          CHANGED_FILES=""
+          if [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            CHANGED_FILES=$(git diff --name-only "${{ github.event.before }}" "${{ github.event.after }}" 2>/dev/null || echo "")
+          fi
+
+          # Fallback: check commits in the push
+          if [ -z "$CHANGED_FILES" ] && [ -n "${{ github.event.commits }}" ]; then
+            # Get all changed files from all commits in this push
+            for commit in ${{ join(github.event.commits.*.id, ' ') }}; do
+              if git rev-parse --verify "$commit" >/dev/null 2>&1; then
+                COMMIT_FILES=$(git diff-tree --no-commit-id --name-only -r "$commit" 2>/dev/null || echo "")
+                if [ -n "$COMMIT_FILES" ]; then
+                  CHANGED_FILES="${CHANGED_FILES}${CHANGED_FILES:+$'\n'}${COMMIT_FILES}"
+                fi
+              fi
+            done
+          fi
+
+          # Final fallback: check last commit
+          if [ -z "$CHANGED_FILES" ]; then
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
+          fi
+
+          if [ -z "$CHANGED_FILES" ]; then
+            # If we can't determine changes, assume we should run
+            echo "only_workflows=false" >> "$GITHUB_OUTPUT"
+            echo "changed_addons=ALL" >> "$GITHUB_OUTPUT"
+            echo "⚠️ Could not determine changed files, proceeding with sync"
+            exit 0
+          fi
+
+          # Remove duplicates and empty lines
+          CHANGED_FILES=$(echo "$CHANGED_FILES" | sort -u | grep -v '^$')
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          # Extract addon directories from changed files
+          CHANGED_ADDONS=$(echo "$CHANGED_FILES" | \
+            grep -E "^[^./][^/]+/" | \
+            cut -d'/' -f1 | \
+            sort -u | \
+            grep -v "^\\." || echo "")
+
+          echo "Changed addons: $CHANGED_ADDONS"
+          # Save to output (newline-separated -> space-separated for easier parsing)
+          echo "changed_addons<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$CHANGED_ADDONS" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+          # Check if only workflow files (and possibly docs) were changed
+          ONLY_WORKFLOWS=true
+          for file in $CHANGED_FILES; do
+            # Skip if it's a workflow file or documentation
+            if [[ "$file" == .github/workflows/* ]] || \
+               [[ "$file" == *.md ]] || \
+               [[ "$file" == .github/*.md ]] || \
+               [[ "$file" == LICENSE* ]] || \
+               [[ "$file" == .gitignore ]] || \
+               [[ "$file" == .editorconfig ]] || \
+               [[ "$file" == README* ]]; then
+              continue
+            else
+              # Found a non-workflow, non-doc file
+              ONLY_WORKFLOWS=false
+              break
+            fi
+          done
+
+          if [ "$ONLY_WORKFLOWS" = "true" ]; then
+            echo "ℹ️ Only workflow/documentation files changed, skipping edge sync"
+            echo "only_workflows=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "✅ Relevant files changed, proceeding with edge sync"
+            echo "only_workflows=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: ⤵️ Checkout master
+        if: |
+          github.event_name == 'workflow_dispatch' ||
+          steps.check_changes.outputs.only_workflows != 'true'
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          ref: master
+          fetch-depth: 0
+          token: ${{ secrets.PAT || secrets.GITHUB_TOKEN }}
+
+      - name: 🔧 Setup Git
+        if: |
+          github.event_name == 'workflow_dispatch' ||
+          steps.check_changes.outputs.only_workflows != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: 💾 Save dev versions from edge branch
+        id: save_versions
+        if: |
+          github.event_name == 'workflow_dispatch' ||
+          steps.check_changes.outputs.only_workflows != 'true'
+        run: |
+          pip install pyyaml --quiet
+
+          # Check if edge branch exists and save versions
+          if git rev-parse --verify origin/edge >/dev/null 2>&1; then
+            echo "📋 Saving current dev versions from edge branch..."
+
+            # Create temp file to store versions
+            VERSIONS_FILE="/tmp/edge_versions.txt"
+            > "$VERSIONS_FILE"
+
+            # Get config.yaml files from edge branch
+            for config in $(git ls-tree -r --name-only origin/edge | grep -E "^[^./][^/]+/config.yaml$"); do
+              ADDON=$(dirname "$config")
+              VERSION=$(git show "origin/edge:$config" 2>/dev/null | grep -E "^version:" | head -1 | sed 's/version:[[:space:]]*["'"'"']\?\([^"'"'"']*\)["'"'"']\?/\1/')
+              if [ -n "$VERSION" ]; then
+                echo "$ADDON=$VERSION" >> "$VERSIONS_FILE"
+                echo "  $ADDON: $VERSION"
+              fi
+            done
+
+            # Output file path for later step
+            echo "versions_file=$VERSIONS_FILE" >> "$GITHUB_OUTPUT"
+          else
+            echo "⚠️ Edge branch doesn't exist yet - no versions to preserve"
+            echo "versions_file=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 🌿 Reset edge branch to master
+        if: |
+          github.event_name == 'workflow_dispatch' ||
+          steps.check_changes.outputs.only_workflows != 'true'
+        run: |
+          echo "Resetting edge branch to match master..."
+          git checkout -B edge master
+
+
+      - name: 📝 Prepare edge for local builds
+        if: |
+          github.event_name == 'workflow_dispatch' ||
+          steps.check_changes.outputs.only_workflows != 'true'
+        run: |
+          pip install pyyaml --quiet
+          python3 .scripts/prepare_edge_branch.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🔄 Update version for changed addons only
+        if: |
+          github.event_name == 'workflow_dispatch' ||
+          steps.check_changes.outputs.only_workflows != 'true'
+        run: |
+          echo "🔍 Determining which addons to bump..."
+
+          # Get all addon directories
+          ALL_ADDONS=$(find . -maxdepth 2 -name "config.yaml" -not -path "./.unsupported/*" | sed 's|^\./||' | sed 's|/config.yaml||' | grep -v "^\." | sort -u)
+
+          # For workflow_dispatch, bump all addons
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "📦 workflow_dispatch: Bumping ALL addons"
+            CHANGED_ADDONS="$ALL_ADDONS"
+          else
+            # Use the addons detected in the check_changes step
+            CHANGED_ADDONS="${{ steps.check_changes.outputs.changed_addons }}"
+
+            # Handle special case where we couldn't detect changes
+            if [ "$CHANGED_ADDONS" = "ALL" ]; then
+              echo "⚠️ Could not detect specific changes - bumping all addons"
+              CHANGED_ADDONS="$ALL_ADDONS"
+            fi
+          fi
+
+          # Load saved versions file
+          VERSIONS_FILE="${{ steps.save_versions.outputs.versions_file }}"
+
+          # Bump changed addons
+          if [ -n "$CHANGED_ADDONS" ]; then
+            echo "📦 Addons to bump (changed in this push):"
+            echo "$CHANGED_ADDONS" | while read addon; do
+              [ -n "$addon" ] && echo "  - $addon"
+            done
+
+            for addon in $CHANGED_ADDONS; do
+              if [ -f "$addon/config.yaml" ]; then
+                echo ""
+                echo "📝 Bumping $addon..."
+                python3 .scripts/bump_version.py "$addon" patch --dev --changelog 2>/dev/null || echo "⚠️ Skipping $addon"
+              fi
+            done
+          fi
+
+          # Restore previous dev versions for UNCHANGED addons
+          if [ -n "$VERSIONS_FILE" ] && [ -f "$VERSIONS_FILE" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            echo ""
+            echo "🔄 Restoring dev versions for unchanged addons..."
+
+            for addon in $ALL_ADDONS; do
+              # Skip if this addon was changed (already bumped above)
+              if echo "$CHANGED_ADDONS" | grep -q "^${addon}$"; then
+                continue
+              fi
+
+              # Look up saved version
+              SAVED_VERSION=$(grep "^${addon}=" "$VERSIONS_FILE" 2>/dev/null | cut -d'=' -f2)
+
+              if [ -n "$SAVED_VERSION" ] && [[ "$SAVED_VERSION" == *"-dev"* ]]; then
+                echo "  📌 Restoring $addon to $SAVED_VERSION"
+                # Update version in config.yaml using sed
+                sed -i "s/^version:.*/version: \"$SAVED_VERSION\"/" "$addon/config.yaml"
+              fi
+            done
+          fi
+
+      - name: 🚀 Push edge branch
+        if: |
+          github.event_name == 'workflow_dispatch' ||
+          steps.check_changes.outputs.only_workflows != 'true'
+        run: |
+          git add -A
+          git diff --staged --quiet || git commit -m "chore: prepare edge branch for local builds [skip ci]"
+          git push origin edge --force

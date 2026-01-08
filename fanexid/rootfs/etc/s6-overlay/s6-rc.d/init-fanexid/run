@@ -1,0 +1,506 @@
+#!/usr/bin/with-contenv bashio
+
+# --- CONFIGURATION ---
+DATA_DIR="/data/fanexid"
+DB_DIR="$DATA_DIR/database"
+PLUGINS_DIR="$DATA_DIR/plugins"
+UPLOADS_DIR="$DATA_DIR/uploads"
+
+bashio::log.info "Starting faneX-ID Add-on initialization..."
+
+# --- FACTORY RESET CHECK (DANGEROUS!) ---
+if bashio::config.true 'reset_database'; then
+    bashio::log.warning "=================================================="
+    bashio::log.warning "   ⚠️  DATABASE RESET ENABLED  ⚠️"
+    bashio::log.warning "=================================================="
+    bashio::log.warning "ALL DATA WILL BE PERMANENTLY DELETED!"
+    bashio::log.warning "This includes:"
+    bashio::log.warning "  - All user accounts and profiles"
+    bashio::log.warning "  - All matches and social connections"
+    bashio::log.warning "  - All chat messages and history"
+    bashio::log.warning "  - All uploaded files"
+    bashio::log.warning "  - All settings and configurations"
+    bashio::log.warning "=================================================="
+
+    # Wait 5 seconds to give user time to cancel
+    bashio::log.warning "Starting reset in 5 seconds... (Stop add-on NOW to abort)"
+    sleep 5
+
+    bashio::log.info "Proceeding with database reset..."
+
+    # Delete all data
+    if [ -d "$DATA_DIR" ]; then
+        bashio::log.info "Deleting all data..."
+        rm -rf "$DATA_DIR"
+    fi
+
+    bashio::log.info "=================================================="
+    bashio::log.info "   ✅ DATABASE RESET COMPLETE"
+    bashio::log.info "=================================================="
+    bashio::log.info "All data has been deleted."
+    bashio::log.info "The add-on will now restart with a fresh database."
+    bashio::log.info ""
+    bashio::log.warning "IMPORTANT: Disable 'reset_database' in the add-on settings!"
+    bashio::log.warning "Otherwise, the database will be wiped again on next restart."
+    bashio::log.info "=================================================="
+fi
+
+# --- CREATE DATA DIRECTORIES ---
+mkdir -p "$DB_DIR"
+mkdir -p "$PLUGINS_DIR"
+mkdir -p "$UPLOADS_DIR"
+
+# --- READ CONFIGURATION FROM HA UI ---
+bashio::log.info "Reading configuration from Home Assistant..."
+
+# Version
+VERSION=$(bashio::config 'version')
+bashio::log.info "Target Version: $VERSION"
+
+# Log Level
+if bashio::config.has_value 'log_level'; then
+    LOG_LEVEL=$(bashio::config 'log_level' | tr '[:lower:]' '[:upper:]')
+    case "$LOG_LEVEL" in
+        TRACE|DEBUG) LOG_LEVEL="DEBUG" ;;
+        NOTICE|INFO) LOG_LEVEL="INFO" ;;
+        WARNING) LOG_LEVEL="WARNING" ;;
+        ERROR|FATAL) LOG_LEVEL="ERROR" ;;
+        *) LOG_LEVEL="INFO" ;;
+    esac
+    export LOG_LEVEL
+    bashio::log.info "Log level set to: $LOG_LEVEL"
+fi
+
+# Database Configuration
+DB_TYPE=$(bashio::config 'database.type')
+
+if [[ "$DB_TYPE" == "postgresql" ]]; then
+    PG_HOST=$(bashio::config 'database.postgresql_host')
+    PG_PORT=$(bashio::config 'database.postgresql_port')
+    PG_USER=$(bashio::config 'database.postgresql_user')
+    PG_PASS=$(bashio::config 'database.postgresql_password')
+    PG_DB=$(bashio::config 'database.postgresql_database')
+
+    export DATABASE_URL="postgresql://$PG_USER:$PG_PASS@$PG_HOST:$PG_PORT/$PG_DB"
+    bashio::log.info "Using PostgreSQL database at $PG_HOST:$PG_PORT"
+else
+    export DATABASE_URL="sqlite:///$DB_DIR/fanexid.db"
+    bashio::log.info "Using SQLite database"
+fi
+
+# Secret Key
+if bashio::config.has_value 'secret_key' && [ -n "$(bashio::config 'secret_key')" ]; then
+    export SECRET_KEY=$(bashio::config 'secret_key')
+    bashio::log.info "Using configured secret key"
+else
+    # Generate or load secret key
+    if [ ! -f "$DATA_DIR/.secret_key" ]; then
+        bashio::log.info "Generating secret key..."
+        python3 -c 'import secrets; print(secrets.token_urlsafe(32))' > "$DATA_DIR/.secret_key"
+    fi
+    export SECRET_KEY=$(cat "$DATA_DIR/.secret_key")
+    bashio::log.info "Using auto-generated secret key"
+fi
+
+# Project Name
+export PROJECT_NAME=$(bashio::config 'project_name')
+
+# Debug Mode
+if bashio::config.true 'debug'; then
+    export DEBUG="true"
+    bashio::log.info "Debug mode: ENABLED"
+else
+    export DEBUG="false"
+fi
+
+# Demo Mode
+if bashio::config.true 'demo_mode'; then
+    export DEMO_MODE="true"
+    bashio::log.info "Demo mode: ENABLED (sample data will be generated)"
+else
+    export DEMO_MODE="false"
+fi
+
+# GitHub Repo Configuration
+if bashio::config.has_value 'github_repo' && [ -n "$(bashio::config 'github_repo')" ]; then
+    export GITHUB_REPO=$(bashio::config 'github_repo')
+    bashio::log.info "GitHub Repo set to: $GITHUB_REPO"
+else
+    export GITHUB_REPO="faneX-ID/core"
+    bashio::log.info "Using default GitHub Repo: $GITHUB_REPO"
+fi
+
+# Release Type Configuration
+if bashio::config.has_value 'release_type' && [ -n "$(bashio::config 'release_type')" ]; then
+    export RELEASE_TYPE=$(bashio::config 'release_type')
+    bashio::log.info "Release Type set to: $RELEASE_TYPE"
+else
+    export RELEASE_TYPE="beta"
+    bashio::log.info "Using default Release Type: $RELEASE_TYPE"
+fi
+
+# Cloudflare Cache Configuration
+if bashio::config.true 'cloudflare_cache'; then
+    export VITE_ENABLE_CLOUDFLARE_CACHE="true"
+    bashio::log.info "Cloudflare Cache: ENABLED"
+else
+    export VITE_ENABLE_CLOUDFLARE_CACHE="false"
+    bashio::log.info "Cloudflare Cache: DISABLED"
+fi
+
+# Version Information
+export BACKEND_VERSION="${BUILD_VERSION:-dev}"
+
+# --- HELPER FUNCTIONS FOR DOWNLOAD ---
+
+# Helper to construct Auth Header if token exists
+get_auth_header() {
+    local token="$1"
+    if [[ -z "$token" ]]; then
+        echo ""
+    elif [[ "$token" == github_pat_* ]]; then
+        echo "Authorization: Bearer $token"
+    elif [[ "$token" == ghp_* ]]; then
+        echo "Authorization: token $token"
+    else
+        echo "Authorization: Bearer $token"
+    fi
+}
+
+# Helper to download with fallback logic
+download_file() {
+    local url="$1"
+    local output="$2"
+    local token="$3"
+
+    bashio::log.info "Attempting download from: $url"
+
+    # 1. Try Public Access (No Token)
+    bashio::log.debug "Trying public access..."
+    # -f fails silently on server errors (404/403)
+    if curl -L -f -H "Accept: application/vnd.github.v3+json" "$url" -o "$output"; then
+        bashio::log.info "✅ Public download successful."
+        return 0
+    fi
+
+    # 2. If failed, check if we have a token and try with it
+    bashio::log.info "Public access failed. Checking for token..."
+
+    if [ -n "$token" ]; then
+        local auth_header=$(get_auth_header "$token")
+        bashio::log.info "Token found. Retrying with authentication..."
+
+        if curl -L -f -H "$auth_header" -H "Accept: application/vnd.github.v3+json" "$url" -o "$output"; then
+            bashio::log.info "✅ Authenticated download successful."
+            return 0
+        else
+            bashio::log.error "❌ Download failed even with token."
+            return 1
+        fi
+    else
+        bashio::log.error "❌ Public access failed and no 'github_token' is configured."
+        bashio::log.error "If this is a private repository, please add a token in the configuration."
+        return 1
+    fi
+}
+
+# --- BUILD FRONTEND FUNCTION ---
+build_frontend() {
+    local source_dir="$1"
+    bashio::log.info "Starting background Frontend build..."
+    bashio::log.info "This happens in the background while the add-on is running."
+
+    if [ -d "$source_dir/frontend" ]; then
+        cd "$source_dir/frontend" || return 1
+
+        bashio::log.info "Running 'npm install'..."
+        if npm install; then
+             bashio::log.info "Configuring relative paths for Ingress..."
+             sed -i "s|defineConfig({|defineConfig({ base: './',|g" vite.config.ts
+             sed -i "s|const API_BASE_URL = .*|const API_BASE_URL = './api/v1'|g" src/config.ts
+
+             bashio::log.info "Running 'npm run build'..."
+             if npm run build; then
+                 bashio::log.info "Frontend build successful. Installing..."
+                 # Clear placeholder
+                 rm -rf /app/frontend/*
+                 if [ -d "dist" ]; then
+                     cp -r dist/* /app/frontend/
+                     bashio::log.info "Frontend successfully installed!"
+                 else
+                     bashio::log.error "'dist' directory not found after build!"
+                 fi
+             else
+                 bashio::log.error "Frontend build failed!"
+             fi
+        else
+             bashio::log.error "npm install failed!"
+        fi
+    else
+        bashio::log.error "Frontend directory not found in repository!"
+    fi
+}
+
+# --- INITIAL CODE DOWNLOAD ---
+# Check if code has been downloaded yet
+if [ ! -f "/app/backend/main.py" ] || [ ! -f "/app/frontend/index.html" ]; then
+    bashio::log.info "==================================================="
+    bashio::log.info "   📦 INITIAL CODE DOWNLOAD REQUIRED"
+    bashio::log.info "==================================================="
+    bashio::log.info "This is the first start or code is missing."
+    bashio::log.info "Attempting to download faneX-ID core..."
+
+    # Get GitHub Token from config (optional)
+    GITHUB_TOKEN=""
+    if bashio::config.has_value 'github_token' && [ -n "$(bashio::config 'github_token')" ]; then
+        GITHUB_TOKEN=$(bashio::config 'github_token')
+        bashio::log.debug "GitHub Token is configured."
+    else
+        bashio::log.debug "No GitHub Token configured."
+    fi
+
+    # Determine version to download
+    DOWNLOAD_VERSION="$VERSION"
+
+    # Get GitHub Repo from config or use default
+    GITHUB_REPO_CONFIG="${GITHUB_REPO:-faneX-ID/core}"
+    REPO_OWNER=$(echo "$GITHUB_REPO_CONFIG" | cut -d'/' -f1)
+    REPO_NAME=$(echo "$GITHUB_REPO_CONFIG" | cut -d'/' -f2)
+
+    if [ "$DOWNLOAD_VERSION" == "latest" ]; then
+        bashio::log.info "Fetching latest release information for $GITHUB_REPO_CONFIG..."
+
+        # We need to fetch the tag name. Logic similar to download: try public, then private.
+        LATEST_RELEASE_TAG=""
+
+        # Use temp file to avoid subshell exit code issues with set -e
+        # 1. Try Public API
+        bashio::log.info "1. Trying public GitHub API..."
+        if curl -s -f -o /tmp/latest_release.json "https://api.github.com/repos/${GITHUB_REPO_CONFIG}/releases/latest"; then
+             # Extract tag
+             bashio::log.info "✅ Public API request successful."
+             LATEST_RELEASE_TAG=$(grep '"tag_name":' /tmp/latest_release.json | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
+        else
+             # 2. Try with Token if available
+             bashio::log.info "⚠️ Public API request failed (likely 404/403 or private repo)."
+             if [ -n "$GITHUB_TOKEN" ]; then
+                 bashio::log.info "2. Retrying with provided GitHub Token..."
+                 AUTH_HEADER=$(get_auth_header "$GITHUB_TOKEN")
+                 if curl -s -f -H "$AUTH_HEADER" -o /tmp/latest_release.json "https://api.github.com/repos/${GITHUB_REPO_CONFIG}/releases/latest"; then
+                     bashio::log.info "✅ Authenticated API request successful."
+                     LATEST_RELEASE_TAG=$(grep '"tag_name":' /tmp/latest_release.json | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
+                 else
+                     bashio::log.warning "❌ Authenticated API request also failed. Please check your token."
+                 fi
+             else
+                 bashio::log.info "No GitHub Token configured to retry with."
+             fi
+        fi
+
+        # Cleanup temp file
+        rm -f /tmp/latest_release.json
+
+        if [ -n "$LATEST_RELEASE_TAG" ]; then
+            DOWNLOAD_VERSION="$LATEST_RELEASE_TAG"
+            bashio::log.info "👉 Latest release identified: $DOWNLOAD_VERSION"
+        else
+            bashio::log.warning "⚠️ Could not identify latest release (or access denied)."
+            bashio::log.warning "👉 Defaulting to 'main' branch as fallback."
+            DOWNLOAD_VERSION="main"
+        fi
+    fi
+
+    # Prepare Download URL
+    if [ "$DOWNLOAD_VERSION" == "main" ]; then
+        DOWNLOAD_URL="https://api.github.com/repos/${GITHUB_REPO_CONFIG}/tarball/main"
+    else
+        DOWNLOAD_URL="https://api.github.com/repos/${GITHUB_REPO_CONFIG}/tarball/$DOWNLOAD_VERSION"
+    fi
+
+    bashio::log.info "Downloading version: $DOWNLOAD_VERSION"
+
+    # Download
+    cd /tmp || exit 1
+    if download_file "$DOWNLOAD_URL" "fanexid.tar.gz" "$GITHUB_TOKEN"; then
+        bashio::log.info "Extracting archive..."
+        rm -rf /tmp/fanexid-src
+        mkdir -p /tmp/fanexid-src
+        tar -xzf fanexid.tar.gz -C /tmp/fanexid-src --strip-components=1
+
+        # Install Backend
+        bashio::log.info "Installing Backend..."
+        if [ -d "/tmp/fanexid-src/backend" ]; then
+            cp -r /tmp/fanexid-src/backend/* /app/backend/
+
+            if [ -f "/app/backend/requirements.txt" ]; then
+                bashio::log.info "Installing Python dependencies from requirements.txt..."
+                pip3 install --no-cache-dir -r /app/backend/requirements.txt || \
+                    bashio::log.warning "Some Python dependencies failed to install"
+            fi
+        else
+            bashio::log.error "Backend directory not found in repository!"
+            exit 1
+        fi
+
+        # Defer Frontend Build
+        BUILD_REQUIRED="true"
+        BUILD_SOURCE="/tmp/fanexid-src"
+
+        # Create placeholder frontend
+        mkdir -p /app/frontend
+        echo "<html><body><h1>Installing faneX-ID...</h1><p>Please wait while the system installs the frontend components. This may take a few minutes.</p><script>setTimeout(function(){location.reload()}, 5000);</script></body></html>" > /app/frontend/index.html
+
+        bashio::log.info "==================================================="
+        bashio::log.info "   ✅ CODE DOWNLOAD COMPLETE"
+        bashio::log.info "==================================================="
+        # Mark that we just did initial download - skip developer_mode re-download
+        INITIAL_DOWNLOAD_DONE="true"
+    else
+        bashio::log.error "Download failed! Please check your network or token settings."
+        # If a specific version was requested and failed, try falling back to main branch
+        if [ "$VERSION" != "latest" ] && [ "$VERSION" != "main" ]; then
+            bashio::log.warning "⚠️ Requested version '$VERSION' not available."
+            bashio::log.warning "👉 Falling back to 'main' branch..."
+            DOWNLOAD_URL="https://api.github.com/repos/${GITHUB_REPO_CONFIG}/tarball/main"
+            if download_file "$DOWNLOAD_URL" "fanexid.tar.gz" "$GITHUB_TOKEN"; then
+                bashio::log.info "✅ Fallback to main branch successful."
+                # Continue with extraction and build (same as above)
+                bashio::log.info "Extracting archive..."
+                rm -rf /tmp/fanexid-src
+                mkdir -p /tmp/fanexid-src
+                tar -xzf fanexid.tar.gz -C /tmp/fanexid-src --strip-components=1
+
+                # Install Backend
+                bashio::log.info "Installing Backend..."
+                if [ -d "/tmp/fanexid-src/backend" ]; then
+                    cp -r /tmp/fanexid-src/backend/* /app/backend/
+
+                    if [ -f "/app/backend/requirements.txt" ]; then
+                        bashio::log.info "Installing Python dependencies from requirements.txt..."
+                        pip3 install --no-cache-dir -r /app/backend/requirements.txt || \
+                            bashio::log.warning "Some Python dependencies failed to install"
+                    fi
+                else
+                    bashio::log.error "Backend directory not found in repository!"
+                    exit 1
+                fi
+
+                # Defer Frontend Build
+                BUILD_REQUIRED="true"
+                BUILD_SOURCE="/tmp/fanexid-src"
+
+                # Create placeholder
+                mkdir -p /app/frontend
+                echo "<html><body><h1>Installing faneX-ID...</h1><p>Fallback mode. Please wait...</p><script>setTimeout(function(){location.reload()}, 5000);</script></body></html>" > /app/frontend/index.html
+
+                bashio::log.info "==================================================="
+                bashio::log.info "   ✅ CODE DOWNLOAD COMPLETE (MAIN BRANCH)"
+                bashio::log.info "==================================================="
+                # Mark that we just did initial download - skip developer_mode re-download
+                INITIAL_DOWNLOAD_DONE="true"
+            else
+                bashio::log.error "❌ Fallback to main branch also failed!"
+                exit 1
+            fi
+        else
+            exit 1
+        fi
+    fi
+fi
+
+# --- DEV MODE: USE MAIN BRANCH ---
+# Skip if we just did initial download (to avoid downloading twice)
+if bashio::config.true 'developer_mode' && [ "${INITIAL_DOWNLOAD_DONE:-false}" != "true" ]; then
+    bashio::log.warning "=================================================="
+    bashio::log.warning "   ⚠️  DEVELOPER MODE ENABLED  ⚠️"
+    bashio::log.warning "=================================================="
+    bashio::log.warning "Using latest code from 'main' branch."
+    bashio::log.warning "Downloading and rebuilding..."
+
+    # Get GitHub Token (Optional)
+    GITHUB_TOKEN=""
+    if bashio::config.has_value 'github_token' && [ -n "$(bashio::config 'github_token')" ]; then
+        GITHUB_TOKEN=$(bashio::config 'github_token')
+    fi
+
+    # Download main branch with fallback
+    cd /tmp || exit 1
+    GITHUB_REPO_CONFIG="${GITHUB_REPO:-faneX-ID/core}"
+    DOWNLOAD_URL="https://api.github.com/repos/${GITHUB_REPO_CONFIG}/tarball/main"
+
+    if download_file "$DOWNLOAD_URL" "main.tar.gz" "$GITHUB_TOKEN"; then
+        bashio::log.info "Extracting..."
+        rm -rf /tmp/fanexid-main
+        mkdir -p /tmp/fanexid-main
+        tar -xzf main.tar.gz -C /tmp/fanexid-main --strip-components=1
+
+        # Update Backend
+        bashio::log.info "Updating Backend code..."
+        if [ -d "/tmp/fanexid-main/backend" ]; then
+            cp -r /tmp/fanexid-main/backend/* /app/backend/
+
+            # Install potentially new python requirements
+            if [ -f "/app/backend/requirements.txt" ]; then
+                bashio::log.info "Installing Python dependencies..."
+                pip3 install --no-cache-dir -r /app/backend/requirements.txt
+            fi
+        else
+            bashio::log.error "Backend directory not found in main branch!"
+        fi
+
+        # Defer Frontend Build
+        BUILD_REQUIRED="true"
+        BUILD_SOURCE="/tmp/fanexid-main"
+
+        bashio::log.info "=================================================="
+        bashio::log.info "   ✅ DEV MODE UPDATE COMPLETE"
+        bashio::log.info "=================================================="
+    else
+        bashio::log.error "Failed to download main branch from GitHub!"
+    fi
+else
+    bashio::log.info "Production Mode: Using existing/packaged version."
+fi
+
+# --- SETUP SYMLINKS FOR PERSISTENCE ---
+bashio::log.info "Setting up persistent storage..."
+
+# Link uploads directory
+mkdir -p /app/backend/static
+rm -rf /app/backend/static/uploads
+ln -s "$UPLOADS_DIR" /app/backend/static/uploads
+
+# Link plugins directory
+rm -rf /app/plugins
+ln -s "$PLUGINS_DIR" /app/plugins
+
+# --- DATABASE MIGRATIONS ---
+if [ -f "/app/backend/alembic.ini" ]; then
+    bashio::log.info "Running database migrations..."
+    cd /app/backend || exit 1
+    alembic upgrade head || bashio::log.warning "Migration failed or not needed, continuing..."
+fi
+
+# --- CREATE .ENV FILE FOR BACKEND ---
+# Required for beta/stable releases to prevent security error
+bashio::log.info "Creating .env file for backend..."
+cat > /app/backend/.env << EOF
+SECRET_KEY=${SECRET_KEY}
+DATABASE_URL=${DATABASE_URL}
+DEBUG=${DEBUG}
+DEMO_MODE=${DEMO_MODE}
+RELEASE_TYPE=${RELEASE_TYPE}
+GITHUB_TOKEN=${GITHUB_TOKEN:-}
+GITHUB_REPO=${GITHUB_REPO}
+EOF
+
+# --- EXECUTE DEFFERED BUILD ---
+if [ "${BUILD_REQUIRED}" == "true" ]; then
+    bashio::log.info "Executing deferred frontend build..."
+    if build_frontend "$BUILD_SOURCE"; then
+          bashio::log.info "Build finished. Cleaning up..."
+          rm -rf "$BUILD_SOURCE" /tmp/fanexid.tar.gz /tmp/main.tar.gz
+    else
+          bashio::log.error "Deferred build failed."
+    fi
+fi
