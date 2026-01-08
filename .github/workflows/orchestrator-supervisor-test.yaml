@@ -77,12 +77,11 @@ jobs:
             while IFS= read -r config_file; do
               addon_dir=$(dirname "$config_file")
               addon_name=$(basename "$addon_dir")
-              # Skip .unsupported addons - they are built locally from unsupported branch
-              # Skip CI-excluded addons (heavy/long-running, only test on release)
-              if [ "$addon_name" != "homeassistant-test-instance" ] && [ "$addon_name" != ".unsupported" ] && [ "$addon_name" != "sap-abap-cloud-dev" ] && [[ "$addon_dir" != ./.unsupported/* ]]; then
+              # Skip hidden directories
+              if [ "$addon_name" != "homeassistant-test-instance" ] && [[ "$addon_dir" != ./.unsupported/* ]]; then
                 ADDONS="${ADDONS}${addon_name}"$'\n'
               fi
-            done < <(find . -maxdepth 2 -name "config.yaml" -not -path "./.unsupported/*" -exec grep -l "^ingress: true" {} +)
+            done < <(find . -maxdepth 2 -name "config.yaml" -exec grep -l "^ingress: true" {} +)
           else
             # Comma-separated list
             ADDONS=$(echo "$INPUT" | tr ',' '\n')
@@ -98,9 +97,9 @@ jobs:
           for addon in $ADDONS; do
             addon=$(echo "$addon" | xargs)  # trim whitespace
 
-            # Skip .unsupported addons - they are built locally from unsupported branch
-            if [[ "$addon" == .unsupported/* ]] || [[ "$addon" == .unsupported* ]] || [ -f "./.unsupported/$addon/config.yaml" ]; then
-              echo "⏭️ $addon is unsupported - skipping (built locally from unsupported branch)"
+            # Skip hidden addons
+            if [[ "$addon" == .* ]]; then
+              echo "⏭️ $addon is hidden - skipping"
               continue
             fi
 
@@ -177,9 +176,9 @@ jobs:
           for addon in "${ADDON_ARRAY[@]}"; do
             addon=$(echo "$addon" | xargs)  # trim whitespace
 
-            # Skip .unsupported addons - they should not be tested here
-            if [[ "$addon" == .unsupported/* ]] || [[ "$addon" == .unsupported* ]] || [ -d "./.unsupported/$addon" ]; then
-              echo "⏭️ Skipping .unsupported addon: $addon (built locally from unsupported branch)"
+            # Skip hidden addons
+            if [[ "$addon" == .* ]]; then
+              echo "⏭️ Skipping hidden addon: $addon"
               continue
             fi
 
@@ -256,40 +255,8 @@ jobs:
             exit 1
           fi
 
-          # Dependencies
-          if echo "${{ needs.filter-ingress.outputs.ingress_addons }}" | grep -qE "wiki.js|pterodactyl-panel|wordpress"; then
-            echo "Installing Dependency: MariaDB (core_mariadb)..."
-            if ! docker exec ha-supervisor-test ha addons install core_mariadb; then
-                 echo "⚠️ Failed to install core_mariadb"
-                 echo "MYSQL_FAILED=true" >> "$GITHUB_ENV"
-            elif ! docker exec ha-supervisor-test ha addons start core_mariadb; then
-                 echo "⚠️ Failed to start core_mariadb"
-                 echo "MYSQL_FAILED=true" >> "$GITHUB_ENV"
-            else
-                 echo "Waiting for MariaDB to be ready..."
-                 echo "MYSQL_FAILED=false" >> "$GITHUB_ENV"
-                 # Poll for MariaDB status
-                 MAX_WAIT=60
-                 START_TIME=$(date +%s)
-                 READY=false
-                 while [ $(($(date +%s) - START_TIME)) -lt $MAX_WAIT ]; do
-                   STATUS=$(docker exec ha-supervisor-test ha addons info core_mariadb --raw-json | jq -r '.data.state' 2>/dev/null || echo "unknown")
-                   if [ "$STATUS" = "started" ]; then
-                     echo "✅ MariaDB is started and ready."
-                     READY=true
-                     break
-                   fi
-                   echo "  ... MariaDB status: $STATUS (waiting)"
-                   sleep 5
-                 done
-                 if [ "$READY" != "true" ]; then
-                   echo "⚠️ MariaDB failed to reach 'started' state within ${MAX_WAIT}s"
-                   echo "MYSQL_FAILED=true" >> "$GITHUB_ENV"
-                 fi
-            fi
-          else
-            echo "MYSQL_FAILED=false" >> "$GITHUB_ENV"
-          fi
+          # Dependencies (Removed irrelevant checks)
+          echo "MYSQL_FAILED=false" >> "$GITHUB_ENV"
 
       - name: "🔍 Test Add-ons"
         if: steps.supervisor.outputs.supervisor_ready == 'true'
@@ -307,11 +274,7 @@ jobs:
             addon=$(echo "$addon" | xargs)  # trim whitespace
             if [ -z "$addon" ]; then continue; fi
 
-            if [ "$MYSQL_FAILED" = "true" ] && echo "$addon" | grep -qE "wiki\.js|wiki\.js3|pterodactyl-panel|wordpress"; then
-                 echo "⏭️ $addon dependency failed - skipping"
-                 RESULTS="$RESULTS\n⏭️ $addon: SKIP (Dependency failed)"
-                 continue
-            fi
+
 
             echo ""
             echo "=========================================="
@@ -323,9 +286,9 @@ jobs:
             CONFIG_FILE="./$addon/config.yaml"
             if [ ! -f "$CONFIG_FILE" ]; then
               if [ -f "./.unsupported/$addon/config.yaml" ]; then
-                echo "❌ Error: .unsupported addon $addon should not be tested here"
-                RESULTS="$RESULTS\n❌ $addon: ERROR (Unsupported addon)"
-                continue
+                 echo "❌ Error: .unsupported addon $addon should not be tested here"
+                 RESULTS="$RESULTS\n❌ $addon: ERROR (Unsupported addon)"
+                 continue
               else
                 echo "❌ Error: Config file not found for $addon"
                 RESULTS="$RESULTS\n❌ $addon: ERROR (Config not found)"
@@ -440,11 +403,6 @@ jobs:
               OPTS=""
               if grep -q "website_name" "$CONFIG_FILE"; then
                 OPTS='{"website_name": "example.com"}'
-              elif [ "$addon" = "bash_script_executer" ]; then
-                OPTS='{"script_path": "/share/test.sh"}'
-              elif [ "$addon" = "wordpress" ]; then
-                # Wordpress requires database config
-                OPTS='{"database_host": "core-mariadb"}'
               fi
 
               if [ -n "$OPTS" ]; then

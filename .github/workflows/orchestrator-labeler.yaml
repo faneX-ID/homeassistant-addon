@@ -147,16 +147,6 @@ jobs:
                     console.log(`  -> Added as supported addon: ${rootDir}`);
                 }
 
-                // Track Unsupported Addons (Label individually, don't count towards "All Supported")
-                if (rootDir === '.unsupported' && parts.length > 2) {
-                    const unsupAddon = parts[1];
-                    // Verify existence of config.yaml and not in blocklist
-                    if (!BLOCKLIST.includes(unsupAddon.toLowerCase()) && fs.existsSync(path.join('.', '.unsupported', unsupAddon, 'config.yaml'))) {
-                        labelsToAdd.add(`addon/${unsupAddon}`);
-                        console.log(`  -> Added as unsupported addon: ${unsupAddon}`);
-                    }
-                }
-
                 // 3a. Detect Version Bumps in config.yaml
                 if (file.filename.endsWith('config.yaml') && file.patch) {
                     // Check if version line was modified
@@ -164,7 +154,7 @@ jobs:
                     if (versionChangePattern.test(file.patch)) {
                         // Determine which addon
                         let addonName = rootDir;
-                        if (rootDir === '.unsupported' && parts.length > 2) {
+                        if (parts.length > 2) {
                             addonName = parts[1];
                         }
 
@@ -172,20 +162,8 @@ jobs:
                         // New addons shouldn't get version-bump label (they have initial version, not a bump)
                         let isNewAddon = false;
 
-                        if (rootDir === '.unsupported' && parts.length > 2) {
-                            // For unsupported addons, check if the addon exists in base branch
-                            try {
-                                execSync(`git cat-file -e origin/${baseRef}:.unsupported/${addonName}/config.yaml`, { stdio: 'pipe' });
-                                // File exists in base branch, so it's not new
-                                isNewAddon = false;
-                            } catch {
-                                // File doesn't exist in base branch, so it's a new addon
-                                isNewAddon = true;
-                            }
-                        } else {
-                            // For supported addons, check if addon exists in baseAddons
-                            isNewAddon = !baseAddons.includes(rootDir);
-                        }
+                        // For supported addons, check if addon exists in baseAddons
+                        isNewAddon = !baseAddons.includes(rootDir);
 
                         if (!isNewAddon) {
                             hasVersionBump = true;
@@ -204,7 +182,6 @@ jobs:
                 // Check if this is a new addon (not in base branch, has config.yaml, valid name)
                 const isNewAddon = !baseAddons.includes(rootDir) &&
                                    !BLOCKLIST.includes(rootDir.toLowerCase()) &&
-                                   rootDir !== '.unsupported' &&
                                    validAddonPattern.test(rootDir) &&
                                    tracking.hasConfig &&
                                    fs.existsSync(path.join(rootDir, 'config.yaml'));
@@ -370,14 +347,7 @@ jobs:
                 console.log("Added 'ci' label");
             }
 
-            // Unsupported addon detection
-            const hasUnsupportedChanges = changedFiles.some(f =>
-                f.filename.startsWith('.unsupported/')
-            );
-            if (hasUnsupportedChanges) {
-                finalLabels.push('unsupported');
-                console.log("Added 'unsupported' label");
-            }
+
 
             // Remove duplicates
             finalLabels = [...new Set(finalLabels)];

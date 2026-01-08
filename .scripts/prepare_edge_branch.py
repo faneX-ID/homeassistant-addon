@@ -245,6 +245,10 @@ def update_repository_json() -> bool:
 
 
 def main():
+    """
+    Main function to prepare the edge branch.
+    Iterates through all add-ons and updates their configuration for local builds.
+    """
     print("🔧 Preparing edge branch for local builds...")
 
     # Find all addon directories

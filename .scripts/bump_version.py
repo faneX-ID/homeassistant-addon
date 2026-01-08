@@ -37,7 +37,12 @@ MIN_AUTO_CONTENT_LENGTH = 10
 
 
 def get_git_remote_url():
-    """Get the GitHub repo URL from git remote."""
+    """
+    Get the GitHub repo URL from git remote.
+
+    Returns:
+        str: The URL of the repository.
+    """
     try:
         result = subprocess.run(
             ["git", "remote", "get-url", "origin"],
@@ -58,7 +63,17 @@ def get_git_remote_url():
 
 
 def get_git_log_for_addon(addon_path, since_tag=None, ignore_tag=None):
-    """Get git commit log with full hash for the addon."""
+    """
+    Get git commit log with full hash for the addon.
+
+    Args:
+        addon_path (str): Path to the add-on directory.
+        since_tag (str, optional): Tag to start the log from. Defaults to None.
+        ignore_tag (str, optional): Tag to ignore. Defaults to None.
+
+    Returns:
+        list: A list of commits with message, full hash, and short hash.
+    """
     try:
         addon_name = os.path.basename(addon_path.rstrip("/\\"))
 
@@ -127,7 +142,16 @@ def get_git_log_for_addon(addon_path, since_tag=None, ignore_tag=None):
 
 
 def make_version_link(text, version):
-    """Make version numbers clickable if a matching dependency is found."""
+    """
+    Make version numbers clickable if a matching dependency is found.
+
+    Args:
+        text (str): The text containing the version number.
+        version (str): The version number to linkify.
+
+    Returns:
+        str: The text with the version number linked if applicable.
+    """
     for dep_name, base_url in DEPENDENCY_URLS.items():
         if dep_name.lower() in text.lower():
             return f"[{version}]({base_url}/{version})"
@@ -135,7 +159,16 @@ def make_version_link(text, version):
 
 
 def categorize_commits(commits, repo_url):
-    """Categorize commits with clickable links."""
+    """
+    Categorize commits with clickable links.
+
+    Args:
+        commits (list): List of commit dictionaries.
+        repo_url (str): The repository URL for linking.
+
+    Returns:
+        dict: A dictionary of categorized commits.
+    """
     categories = {
         "✨ Features": [],
         "🐛 Bug Fixes": [],
@@ -214,7 +247,15 @@ def categorize_commits(commits, repo_url):
 
 
 def parse_existing_changelog_entry(content: str) -> dict:
-    """Parse an existing changelog entry into categories."""
+    """
+    Parse an existing changelog entry into categories.
+
+    Args:
+        content (str): The content of the changelog entry.
+
+    Returns:
+        dict: The parsed categories and their items.
+    """
     categories = {}
     current_category = None
 
@@ -238,7 +279,18 @@ def parse_existing_changelog_entry(content: str) -> dict:
 def generate_changelog_entry(
     version, addon_path, changelog_message=None, existing_entry=None
 ):
-    """Generate a detailed changelog entry with clickable links."""
+    """
+    Generate a detailed changelog entry with clickable links.
+
+    Args:
+        version (str): The new version string.
+        addon_path (str): Path to the add-on.
+        changelog_message (str, optional): Custom message. Defaults to None.
+        existing_entry (str, optional): Existing changelog entry to merge. Defaults to None.
+
+    Returns:
+        str: The generated markdown changelog entry.
+    """
     entry_date = datetime.now().strftime("%Y-%m-%d")
     heading = f"## {version} ({entry_date})"
     entry = f"{heading}\n\n"
@@ -298,7 +350,15 @@ def generate_changelog_entry(
 
 
 def parse_version(version_str):
-    """Parse version string, handling dev suffix and build metadata."""
+    """
+    Parse version string, handling dev suffix and build metadata.
+
+    Args:
+        version_str (str): The version string to parse.
+
+    Returns:
+        tuple: (major, minor, patch, is_dev)
+    """
     # Split off build metadata (everything after +)
     version_base = version_str.split("+")[0]
 
@@ -314,7 +374,17 @@ def parse_version(version_str):
 
 
 def update_image_tag(content, addon_path, is_dev):
-    """Toggle image tag in config.yaml based on dev status."""
+    """
+    Toggle image tag in config.yaml based on dev status.
+
+    Args:
+        content (str): The content of config.yaml.
+        addon_path (str): Path to the add-on.
+        is_dev (bool): Whether this is a dev build.
+
+    Returns:
+        str: The updated content.
+    """
     # Default image convention: ghcr.io/faserf/hassio-addons-{slug}-{arch}
     # However, config.yaml usually uses {arch} placeholder or implied structure.
     # Looking at other addons/docs, 'image' in config.yaml is usually:
@@ -400,7 +470,18 @@ def bump_version(
     changelog_only=False,
     target_version=None,
 ):
-    """Bump version with optional dev suffix."""
+    """
+    Bump version with optional dev suffix.
+
+    Args:
+        addon_path (str): Path to add-on.
+        increment (str): "major", "minor", or "patch".
+        changelog_message (str, optional): Custom message.
+        set_dev (bool): Set version to dev.
+        force_changelog (bool): Force generation even for dev.
+        changelog_only (bool): Only update changelog.
+        target_version (str, optional): Specific version to set.
+    """
     config_path = os.path.join(addon_path, "config.yaml")
     if not os.path.exists(config_path):
         config_path = os.path.join(addon_path, "config.json")

@@ -8,6 +8,15 @@ import yaml
 
 
 def run_command(cmd):
+    """
+    Run a shell command and return its output.
+
+    Args:
+        cmd (list): List of command arguments.
+
+    Returns:
+        str or None: The standard output if successful, None otherwise.
+    """
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return result.stdout.strip()
@@ -17,6 +26,12 @@ def run_command(cmd):
 
 
 def get_base_ref():
+    """
+    Determine the base git reference for comparison.
+
+    Returns:
+        str: The base reference (e.g., "origin/master" or "HEAD~1").
+    """
     # In PRs, use the base ref (e.g. master)
     base_ref = os.environ.get("GITHUB_BASE_REF")
     if base_ref:
@@ -27,6 +42,11 @@ def get_base_ref():
 
 
 def main():
+    """
+    Main function to check and bump script version.
+
+    Checks for changes in script files and bumps the version in test-config.yaml if needed.
+    """
     base = get_base_ref()
     current = "HEAD"
 

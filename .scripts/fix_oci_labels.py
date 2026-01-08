@@ -6,6 +6,15 @@ import yaml
 
 
 def generate_labels(addon_path):
+    """
+    Generate OCI labels for the add-on Dockerfile.
+
+    Args:
+        addon_path (str): Path to the add-on directory.
+
+    Returns:
+        bool: True if labels were generated/updated, False otherwise.
+    """
     config_path = os.path.join(addon_path, "config.yaml")
     dockerfile_path = os.path.join(addon_path, "Dockerfile")
 
@@ -73,6 +82,11 @@ def generate_labels(addon_path):
 
 
 def main():
+    """
+    Main function to generate OCI labels.
+
+    Iterates through all add-ons and updates their Dockerfiles with OCI labels.
+    """
     # Helper to find all add-ons
     # Root dirs + .unsupported dirs
     addons = []

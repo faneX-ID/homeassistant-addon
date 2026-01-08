@@ -14,6 +14,13 @@ README_PATH = "README.md"
 
 
 def update_readme_link(addon, to_unsupported):
+    """
+    Update README.md links when moving an add-on.
+
+    Args:
+        addon (str): The add-on slug.
+        to_unsupported (bool): True if moving to unsupported, False otherwise.
+    """
     if not os.path.exists(README_PATH):
         return
 
@@ -40,6 +47,12 @@ def update_readme_link(addon, to_unsupported):
 
 
 def prune_images(addon):
+    """
+    Prune Docker images for the given add-on, keeping only the latest.
+
+    Args:
+        addon (str): The add-on slug.
+    """
     print(f"🗑️ Pruning Docker images for {addon} (Keeping 1)...")
     # We call the prune_registry.py script but we need to modify it or pass args.
     # Since prune_registry creates a list of ALL packages, it might be slow for just one.
@@ -101,6 +114,13 @@ def prune_images(addon):
 
 
 def toggle_support(addon, action):
+    """
+    Toggle support status of an add-on (move between root and .unsupported).
+
+    Args:
+        addon (str): The add-on slug.
+        action (str): "supported" or "unsupported".
+    """
     target_state_unsupported = action == "unsupported"
 
     if target_state_unsupported:

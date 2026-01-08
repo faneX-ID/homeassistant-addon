@@ -4,6 +4,12 @@ import sys
 
 
 def fix_config(path):
+    """
+    Remove deprecated configuration keys from config.yaml.
+
+    Args:
+        path (str): Path to the config.yaml file.
+    """
     try:
         with open(path, "r") as f:
             content = f.readlines()
@@ -64,7 +70,12 @@ def fix_config(path):
 
 
 def fix_build_json(path):
-    """Remove empty 'args' objects from build.json files using proper JSON parsing."""
+    """
+    Remove empty 'args' objects from build.json files using proper JSON parsing.
+
+    Args:
+        path (str): Path to the build.json file.
+    """
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -105,6 +116,11 @@ SKIP_DIRS = {
 
 
 def main():
+    """
+    Main function to fix configuration files.
+
+    Scans for config.yaml and build.json files and applies fixes.
+    """
     targets = sys.argv[1:] if len(sys.argv) > 1 else ["."]
 
     for target in targets:

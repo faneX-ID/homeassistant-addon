@@ -5,6 +5,15 @@ import yaml
 
 
 def check_addon(addon_path):
+    """
+    Check if the add-on at the given path complies with the required standards.
+
+    Args:
+        addon_path (str): The path to the add-on directory.
+
+    Returns:
+        tuple: A tuple containing a boolean indicating success, a list of errors, and a list of warnings.
+    """
     errors = []
     warnings = []
 
@@ -117,6 +126,11 @@ def check_addon(addon_path):
 
 
 def main():
+    """
+    Main entry point for the compliance checker.
+
+    Expects add-on directories to be passed as command-line arguments.
+    """
     if len(sys.argv) < 2:
         print("Usage: python check_compliance.py <addon_dir> [addon_dir2 ...]")
         sys.exit(0)  # Don't error if no args, just exit (simplifies workflow)

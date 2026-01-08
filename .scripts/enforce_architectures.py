@@ -8,6 +8,15 @@ UNSUPPORTED_ARCHES = ["armhf", "armv7", "i386"]
 
 
 def enforce_config(file_path):
+    """
+    Remove unsupported architectures from config.yaml.
+
+    Args:
+        file_path (Path): Path to the config.yaml file.
+
+    Returns:
+        bool: True if file was modified, False otherwise.
+    """
     with open(file_path, "r", encoding="utf-8") as f:
         try:
             content = yaml.safe_load(f)
@@ -32,6 +41,15 @@ def enforce_config(file_path):
 
 
 def enforce_build(file_path):
+    """
+    Remove unsupported architectures from build.yaml or build.json.
+
+    Args:
+        file_path (Path): Path to the build file.
+
+    Returns:
+        bool: True if file was modified, False otherwise.
+    """
     if file_path.suffix == ".yaml":
         with open(file_path, "r", encoding="utf-8") as f:
             try:
@@ -74,6 +92,11 @@ def enforce_build(file_path):
 
 
 def main():
+    """
+    Main function to enforce architecture restrictions.
+
+    Scans all add-on configuration and build files and removes 32-bit architectures.
+    """
     try:
         modified_addons = set()
         root_dir = Path(".")

@@ -86,9 +86,6 @@ jobs:
           import uuid
 
           filters = {}
-          # Add-ons excluded from CI builds/tests (only built during release)
-          # These add-ons are too large or resource-intensive for CI
-          filters = {}
 
           # Scan for config.yaml to identify add-ons
           for root, dirs, files in os.walk("."):
@@ -99,9 +96,7 @@ jobs:
                   # Standardize path separators
                   addon_name = addon_name.replace(os.path.sep, "/")
 
-                  # Skip hidden directories (including .unsupported - these are built locally from unsupported branch)
-                  # If the path starts with . (including .unsupported), skip
-                  # If the path is inside a hidden dir (like .git/foo), skip
+                  # Skip hidden directories
                   parts = addon_name.split("/")
                   if parts[0].startswith("."):
                       continue
@@ -280,7 +275,7 @@ jobs:
         uses: frenck/action-addon-linter@f995494fd84fae6310d23617e66d0e37de4f14eb # v2
         with:
           path: "./${{ matrix.addon }}"
-        continue-on-error: ${{ matrix.addon == 'netboot-xyz' }}
+        continue-on-error: false
 
       # 5. Platinum Compliance (S6, Healthcheck, OCI, Translations, Images)
       - name: 🐍 Set up Python (cached)

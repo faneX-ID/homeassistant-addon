@@ -6,6 +6,12 @@ from bump_version import bump_version
 
 
 def get_changed_files():
+    """
+    Get list of changed files in the last commit (HEAD~1 to HEAD).
+
+    Returns:
+        list: List of changed filenames, or empty list if error.
+    """
     try:
         # Get list of changed files in the last commit
         result = subprocess.check_output(
@@ -18,6 +24,12 @@ def get_changed_files():
 
 
 def main():
+    """
+    Main function to check for add-on updates.
+
+    Detects changes in add-on directories and automatically bumps the patch version
+    if build files (Dockerfile, build.yaml) are modified but config.yaml is not.
+    """
     changed_files = get_changed_files()
     if not changed_files:
         print("No changed files detected.")
