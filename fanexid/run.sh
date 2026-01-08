@@ -204,6 +204,44 @@ download_file() {
         bashio::log.error "If this is a private repository, please add a token in the configuration."
         return 1
     fi
+    fi
+}
+
+# --- BUILD FRONTEND FUNCTION ---
+build_frontend() {
+    local source_dir="$1"
+    bashio::log.info "Starting background Frontend build..."
+    bashio::log.info "This happens in the background while the add-on is running."
+
+    if [ -d "$source_dir/frontend" ]; then
+        cd "$source_dir/frontend" || return 1
+
+        bashio::log.info "Running 'npm install'..."
+        if npm install; then
+             bashio::log.info "Configuring relative paths for Ingress..."
+             sed -i "s|defineConfig({|defineConfig({ base: './',|g" vite.config.ts
+             sed -i "s|const API_BASE_URL = .*|const API_BASE_URL = './api/v1'|g" src/config.ts
+
+             bashio::log.info "Running 'npm run build'..."
+             if npm run build; then
+                 bashio::log.info "Frontend build successful. Installing..."
+                 # Clear placeholder
+                 rm -rf /app/frontend/*
+                 if [ -d "dist" ]; then
+                     cp -r dist/* /app/frontend/
+                     bashio::log.info "Frontend successfully installed!"
+                 else
+                     bashio::log.error "'dist' directory not found after build!"
+                 fi
+             else
+                 bashio::log.error "Frontend build failed!"
+             fi
+        else
+             bashio::log.error "npm install failed!"
+        fi
+    else
+        bashio::log.error "Frontend directory not found in repository!"
+    fi
 }
 
 # --- INITIAL CODE DOWNLOAD ---
@@ -307,41 +345,15 @@ if [ ! -f "/app/backend/main.py" ] || [ ! -f "/app/frontend/index.html" ]; then
             exit 1
         fi
 
-        # Build Frontend
-        bashio::log.info "Building Frontend (this may take several minutes)..."
-        if [ -d "/tmp/fanexid-src/frontend" ]; then
-            cd /tmp/fanexid-src/frontend || exit 1
+        # Defer Frontend Build
+        BUILD_REQUIRED="true"
+        BUILD_SOURCE="/tmp/fanexid-src"
 
-            bashio::log.info "Running 'npm install'..."
-            if npm install; then
-                bashio::log.info "Configuring relative paths for Ingress..."
-                sed -i "s|defineConfig({|defineConfig({ base: './',|g" vite.config.ts
-                sed -i "s|const API_BASE_URL = .*|const API_BASE_URL = './api/v1'|g" src/config.ts
-                bashio::log.info "Running 'npm run build'..."
-                if npm run build; then
-                    bashio::log.info "Frontend build successful. Installing..."
-                    if [ -d "dist" ]; then
-                        cp -r dist/* /app/frontend/
-                    else
-                        bashio::log.error "'dist' directory not found after build!"
-                        exit 1
-                    fi
-                else
-                    bashio::log.error "Frontend build failed!"
-                    exit 1
-                fi
-            else
-                bashio::log.error "npm install failed!"
-                exit 1
-            fi
-        else
-            bashio::log.error "Frontend directory not found in repository!"
-            exit 1
-        fi
+        # Create placeholder frontend
+        mkdir -p /app/frontend
+        echo "<html><body><h1>Installing faneX-ID...</h1><p>Please wait while the system installs the frontend components. This may take a few minutes.</p><script>setTimeout(function(){location.reload()}, 5000);</script></body></html>" > /app/frontend/index.html
 
-        # Cleanup
-        cd / || exit 1
-        rm -rf /tmp/fanexid.tar.gz /tmp/fanexid-src
+        # Cleanup deferred until after build
 
         bashio::log.info "==================================================="
         bashio::log.info "   ✅ CODE DOWNLOAD COMPLETE"
@@ -378,38 +390,15 @@ if [ ! -f "/app/backend/main.py" ] || [ ! -f "/app/frontend/index.html" ]; then
                     exit 1
                 fi
 
-                # Build Frontend
-                bashio::log.info "Building Frontend (this may take several minutes)..."
-                if [ -d "/tmp/fanexid-src/frontend" ]; then
-                    cd /tmp/fanexid-src/frontend || exit 1
+                # Defer Frontend Build
+                BUILD_REQUIRED="true"
+                BUILD_SOURCE="/tmp/fanexid-src"
 
-                    bashio::log.info "Running 'npm install'..."
-                    if npm install; then
-                        bashio::log.info "Running 'npm run build'..."
-                        if npm run build; then
-                            bashio::log.info "Frontend build successful. Installing..."
-                            if [ -d "dist" ]; then
-                                cp -r dist/* /app/frontend/
-                            else
-                                bashio::log.error "'dist' directory not found after build!"
-                                exit 1
-                            fi
-                        else
-                            bashio::log.error "Frontend build failed!"
-                            exit 1
-                        fi
-                    else
-                        bashio::log.error "npm install failed!"
-                        exit 1
-                    fi
-                else
-                    bashio::log.error "Frontend directory not found in repository!"
-                    exit 1
-                fi
+                # Create placeholder
+                mkdir -p /app/frontend
+                echo "<html><body><h1>Installing faneX-ID...</h1><p>Fallback mode. Please wait...</p><script>setTimeout(function(){location.reload()}, 5000);</script></body></html>" > /app/frontend/index.html
 
-                # Cleanup
-                cd / || exit 1
-                rm -rf /tmp/fanexid.tar.gz /tmp/fanexid-src
+                # Cleanup deferred
 
                 bashio::log.info "==================================================="
                 bashio::log.info "   ✅ CODE DOWNLOAD COMPLETE (MAIN BRANCH)"
@@ -466,44 +455,11 @@ if bashio::config.true 'developer_mode' && [ "${INITIAL_DOWNLOAD_DONE:-false}" !
             bashio::log.error "Backend directory not found in main branch!"
         fi
 
-        # Rebuild Frontend
-        bashio::log.info "Rebuilding Frontend..."
-        if [ -d "/tmp/fanexid-main/frontend" ]; then
-            # Create temp build dir
-            rm -rf /tmp/frontend_build
-            mkdir -p /tmp/frontend_build
-            cp -r /tmp/fanexid-main/frontend/* /tmp/frontend_build/
+        # Defer Frontend Build
+        BUILD_REQUIRED="true"
+        BUILD_SOURCE="/tmp/fanexid-main"
 
-            cd /tmp/frontend_build || exit 1
-
-            bashio::log.info "Running 'npm install'..."
-            if npm install; then
-                bashio::log.info "Configuring relative paths for Ingress..."
-                sed -i "s|defineConfig({|defineConfig({ base: './',|g" vite.config.ts
-                sed -i "s|const API_BASE_URL = .*|const API_BASE_URL = './api/v1'|g" src/config.ts
-                bashio::log.info "Running 'npm run build'..."
-                if npm run build; then
-                    bashio::log.info "Frontend build successful. Updating files..."
-                    # Remove old frontend files
-                    rm -rf /app/frontend/*
-                    if [ -d "dist" ]; then
-                        cp -r dist/* /app/frontend/
-                    else
-                        bashio::log.error "'dist' directory not found after build!"
-                    fi
-                else
-                    bashio::log.error "Frontend build failed! Keeping old frontend."
-                fi
-            else
-                bashio::log.error "npm install failed! Keeping old frontend."
-            fi
-        else
-            bashio::log.error "Frontend directory not found in main branch!"
-        fi
-
-        # Cleanup
-        rm -rf /tmp/main.tar.gz /tmp/fanexid-main /tmp/frontend_build
-        cd / || exit 1
+        # Cleanup deferred
 
         bashio::log.info "=================================================="
         bashio::log.info "   ✅ DEV MODE UPDATE COMPLETE"
@@ -586,4 +542,26 @@ cleanup() {
 
 trap cleanup SIGTERM SIGHUP
 
-wait $NGINX_PID
+wait $NGINX_PID &
+WAIT_PID=$!
+
+# --- EXECUTE DEFFERED BUILD ---
+if [ "${BUILD_REQUIRED}" == "true" ]; then
+    bashio::log.info "Executing deferred frontend build..."
+    build_frontend "$BUILD_SOURCE"
+
+    # Check if we are still running
+    if kill -0 $NGINX_PID 2>/dev/null; then
+        bashio::log.info "Build finished. Cleaning up..."
+        rm -rf "$BUILD_SOURCE" /tmp/fanexid.tar.gz /tmp/main.tar.gz
+
+        # Reload Nginx to serve new files? (Not strictly needed as files are static)
+        # bashio::log.info "Reloading Nginx..."
+        # kill -HUP $NGINX_PID
+    else
+        bashio::log.error "Services stopped during build!"
+    fi
+fi
+
+# Wait for process
+wait $WAIT_PID
